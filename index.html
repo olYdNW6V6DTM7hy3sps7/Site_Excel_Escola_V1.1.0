@@ -96,6 +96,10 @@
             margin: 0;
             font-family: inherit;
         }
+        /* Corrigindo a cor de status para ícones */
+        .status-invalid i { color: #ef4444; }
+        .status-corrected i { color: #f59e0b; }
+        .status-valid i { color: #10b981; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -180,6 +184,29 @@
                     </select>
                 </div>
             </div>
+            
+            <!-- Novos Selects para identificar os campos obrigatórios para o relatório de erros -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Coluna do Responsável</label>
+                    <select id="responsavelColumn" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">Selecione a coluna...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Coluna do Aluno</label>
+                    <select id="alunoColumn" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">Selecione a coluna...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Coluna da Turma</label>
+                    <select id="turmaColumn" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                        <option value="">Selecione a coluna...</option>
+                    </select>
+                </div>
+            </div>
+
 
             <!-- AI Detection Status -->
             <div id="aiStatus" class="mt-4 hidden">
@@ -195,15 +222,15 @@
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-lg font-semibold text-gray-900">Prévia dos Contatos</h2>
                 <div class="flex items-center space-x-4 text-sm">
-                    <span class="status-valid">● Válido</span>
-                    <span class="status-warning">● Corrigido</span>
-                    <span class="status-invalid">● Inválido</span>
+                    <span class="status-valid">🟢 Válido</span>
+                    <span class="status-warning">🟡 Corrigido</span>
+                    <span class="status-invalid">🔴 Inválido</span>
                 </div>
             </div>
             
             <!-- Texto de prévia atualizado no main.js -->
             <div class="mb-4">
-                <p class="text-sm text-gray-600">Mostrando os primeiros 200 de <span id="totalContacts">0</span> contatos (Edite a tabela diretamente)</p>
+                <p class="text-sm text-gray-600">Mostrando os primeiros 200 de <span id="totalContacts">0</span> contatos. Contatos <span class="font-bold status-invalid">inválidos</span> são movidos para o final da lista. (Edite a tabela diretamente)</p>
             </div>
 
             <div class="table-container">
@@ -211,8 +238,9 @@
                     <thead class="bg-gray-50 sticky top-0">
                         <tr>
                             <th class="px-4 py-2 text-left font-medium text-gray-700">#</th>
-                            <th class="px-4 py-2 text-left font-medium text-gray-700">Nome</th>
-                            <th class="px-4 py-2 text-left font-medium text-gray-700">Telefone</th>
+                            <th class="px-4 py-2 text-left font-medium text-gray-700">Nome (Mapeado)</th>
+                            <th class="px-4 py-2 text-left font-medium text-gray-700">Telefone (Formatado)</th>
+                            <th class="px-4 py-2 text-left font-medium text-gray-700">DDD</th>
                             <th class="px-4 py-2 text-left font-medium text-gray-700">Status</th>
                             <th class="px-4 py-2 text-left font-medium text-gray-700">Ação</th>
                         </tr>
