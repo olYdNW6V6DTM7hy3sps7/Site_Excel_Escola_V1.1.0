@@ -81,6 +81,8 @@ from pydantic import BaseModel, Field # ATUALIZADO: Importa Field para validaç�
 import logging 
 
 # --- IMPLEMENTAÇÃO (LGPD: Monitoramento e Auditoria de Logs) ---
+# Configura o sistema de logging do Python para registrar eventos de segurança.
+# Isso é essencial para a LGPD (Art. 46-48).
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] [%(levelname)s] [SEGURANCA_LOG] %(message)s",
@@ -90,18 +92,21 @@ logging.basicConfig(
 
 # Configurações de Integração da AI
 AI_MODEL = "tngtech/deepseek-r1t2-chimera:free"
-SITE_URL = os.getenv("FRONTEND_URL", "http://localhost:8000") 
+# Constantes para OpenRouter (melhora a classificação e é boa prática)
+SITE_URL = os.getenv("FRONTEND_URL", "http://localhost:8000") # Use a variável do Render
 SITE_TITLE = "WhatsApp Bulk Manager"
 
 class Config:
+    # NOVO: Variável de ambiente para a API da AI (DeepSeek via OpenRouter)
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+    # REMOVIDO: GEMINI_API_KEY (substituído por OPENROUTER_API_KEY)
     REDIS_URL = os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379")
     CORS_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
     RATE_LIMIT_REQUESTS = 100
     RATE_LIMIT_WINDOW = 3600  # 1 hour
 
 # Initialize FastAPI app
-app = FastAPI(title="WhatsApp Bulk Manager API", version="1.2.0")
+app = FastAPI(title="WhatsApp Bulk Manager API", version="1.2.0") # Versão atualizada
 
 # CORS middleware
 app.add_middleware(
@@ -112,12 +117,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Redis client
+# Redis client for rate limiting
 redis_client = None
 if Config.REDIS_URL:
     try:
         redis_client = redis.from_url(Config.REDIS_URL, decode_responses=True)
     except Exception as e:
+        print(f"Redis connection failed: {e}")
         # --- LGPD (Monitoramento / Resposta a Incidentes) ---
         logging.critical(f"Falha CRÍTICA ao conectar ao Redis: {e}. O rastreamento de jobs não funcionará.")
         # --------------------------------------------------
@@ -151,7 +157,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage]
-    contact_data_sample: Optional[str] = None 
+    contact_data_sample: Optional[str] = None # JSON stringified contact data sample
 
 class HealthResponse(BaseModel):
     status: str
@@ -160,13 +166,15 @@ class HealthResponse(BaseModel):
 
 # --- Fim dos Modelos ---
 
-# Rate limiting
+# Rate limiting decorator
 async def check_rate_limit(client_ip: str) -> bool:
+    """Check if client has exceeded rate limit"""
     if not redis_client:
         return True
     
     key = f"rate_limit:{client_ip}"
     try:
+        # Permite 100 requisições por hora
         current = redis_client.incr(key)
         if current == 1:
             redis_client.expire(key, Config.RATE_LIMIT_WINDOW)
@@ -175,6 +183,7 @@ async def check_rate_limit(client_ip: str) -> bool:
         
         if is_limited:
             # --- LGPD (Monitoramento) ---
+            # Registra um evento de segurança crítico.
             logging.warning(f"RATE LIMIT EXCEDIDO (Medida Anti-Hacking/DDOS) pelo IP: {client_ip}")
             # ------------------------------
         
@@ -183,9 +192,10 @@ async def check_rate_limit(client_ip: str) -> bool:
         # --- LGPD (Monitoramento) ---
         logging.error(f"Erro no Redis (Rate Limit): {e}. Permitindo passagem (fail-open).")
         # ------------------------------
+        # Em caso de erro do Redis, continua sem limitação (fail-open)
         return True
 
-# Health check
+# Health check endpoint
 @app.get("/api/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint"""
@@ -215,35 +225,36 @@ SUA PERSONALIDADE:
 1. Apresente-se sempre como: "Ajudante Geral a AI que pensa por você".
 2. Seja prestativo, informativo, conciso e use um tom profissional e amigável.
 3. Fale exclusivamente em Português do Brasil.
-4. Ao se apresentar pela primeira vez, explique sua utilidade (analisar dados, guiar no uso do site, ajudar a remover contatos).
+4. Ao se apresentar pela primeira vez, explique sua utilidade (analisar dados, guiar no uso do site).
 
 SUAS TAREFAS E CONHECIMENTO SOBRE O SITE:
 1. Entender o fluxo de trabalho do site: Upload, Mapeamento, Limpeza/Validação, Geração VCF ou Envio via API.
 
 2. **ANÁLISE DE DADOS (CRÍTICO):**
     Você receberá o contexto dos dados no formato JSON stringificado em `contact_data_sample`.
+    Use os dados de `processing_complete` (se disponíveis) para responder sobre totais, válidos e inválidos.
+    Use os campos `invalid_contacts_sample` e `valid_contacts_sample` para dar exemplos.
 
-    A. Se `processing_not_started`:
-        - O JSON conterá `sample_data` (dados brutos).
-        - Use `sample_data` para ajudar o usuário a escolher as colunas corretas.
-
-    B. Se `processing_complete`:
-        - O JSON conterá resumos: `total_contacts`, `total_valid`, `total_invalid`.
-        - Ele também conterá `invalid_contacts_sample` (exemplos de falhas) e `valid_contacts_sample` (exemplos de sucesso).
-
-    **SUA REGRA MAIS IMPORTANTE (LGPD: Anonimização e Privacidade):**
-    - Você recebe apenas uma *amostra* dos dados (Minimização de Dados).
-    - **NUNCA** repita dados pessoais (como telefones ou nomes) na sua resposta, a menos que o usuário pergunte *especificamente* por eles.
+    **SUA REGRA DE PRIVACIDADE (LGPD):**
+    - Você recebe apenas uma *amostra* dos dados.
+    - **NUNCA** repita dados pessoais (como telefones) na sua resposta.
     - Se o usuário perguntar sobre contatos "inválidos":
         1. Olhe para `total_invalid`. Se for > 0, informe o número (ex: "Foram encontrados 4 contatos inválidos.").
-        2. Use `invalid_contacts_sample` para listar os nomes (ex: "Aqui estão alguns deles: [Nome do Aluno], [Nome do Aluno]...").
+        2. Use `invalid_contacts_sample` para listar os nomes (ex: "Aqui estão alguns deles: [Nome do Aluno]...").
         3. Use o campo `telefone_original` para explicar POR QUE falharam (ex: "O número '123' é muito curto").
     - Se `total_invalid` for 0, diga "Nenhum contato falhou na validação."
     
-3. **REMOÇÃO DE CONTATOS (NOVO):**
-    - O frontend (JavaScript) tentará capturar pedidos de remoção (ex: "remover joão").
-    - Se o frontend falhar e o pedido chegar a você, você NÃO PODE remover o contato.
-    - Em vez disso, responda: "Eu entendi que você quer remover um contato. Para fazer isso, por favor, clique no ícone de lixeira (<i class='fas fa-trash-alt'></i>) ao lado do nome dele na tabela de prévia."
+3. **REMOÇÃO DE CONTATOS (VIA AI):**
+    - O frontend (JavaScript) só consegue lidar com remoção por ID (ex: "remover 15").
+    - Pedidos complexos (por nome, status, turma, ou "todos menos X") chegarão a você.
+    - Se o usuário pedir para remover contatos (ex: 'remover o Paulo Sérgio', 'apagar todos os inválidos', 'deletar contatos da turma A', 'apagar todos menos o ID 5'), sua tarefa é analisar o `contact_data_sample` (especificamente os dados de `processing_complete`) e identificar os IDs (o campo `id`) dos contatos que correspondem ao pedido.
+    - Na sua resposta de texto, inclua uma lista especial formatada exatamente assim: [DELETE_IDS: 1, 5, 12]
+    - **Exemplo 1 (Usuário: 'apagar inválidos'):** 'Encontrei 2 contatos inválidos na amostra. [DELETE_IDS: 2, 7]'
+    - **Exemplo 2 (Usuário: 'remover o Paulo Sérgio'):** 'Encontrei o contato "Paulo Sérgio". [DELETE_IDS: 5]'
+    - **Exemplo 3 (Usuário: 'apagar todos da turma A'):** 'Encontrei 3 contatos da Turma A na amostra. [DELETE_IDS: 1, 3, 8]'
+    - **Exemplo 4 (Usuário: 'apagar todos menos o ID 5'):** 'Entendido. Vou preparar todos os outros contatos (da amostra) para remoção. [DELETE_IDS: 1, 2, 3, 4, 6, 7, 8, ...]'
+    - Baseie-se nos campos disponíveis na amostra: `id`, `aluno`, `responsavel`, `turma`, `status` (que pode ser 'valid' ou 'invalid').
+    - Se você não encontrar nenhum contato que corresponda ao pedido, apenas responda normalmente, *sem* a lista [DELETE_IDS:].
 
 4. Se o usuário perguntar algo não relacionado (pseudo hacking, engenharia social, etc.), redirecione educadamente: "Meu foco é exclusivamente ajudar com o gerenciamento de contatos para WhatsApp."
 """
@@ -251,7 +262,7 @@ SUAS TAREFAS E CONHECIMENTO SOBRE O SITE:
 @app.post("/api/chat")
 async def handle_chat_query(request: ChatRequest, client_request: Request):
     """Endpoint para o Chatbot AI"""
-    client_ip = client_request.client.host 
+    client_ip = client_request.client.host # IP para logging
 
     if not Config.OPENROUTER_API_KEY:
         # --- LGPD (Monitoramento) ---
@@ -266,26 +277,34 @@ async def handle_chat_query(request: ChatRequest, client_request: Request):
         )
     
     # --- LGPD (Monitoramento) ---
+    # Loga a *tentativa* de chat, sem logar a mensagem (privacidade).
     logging.info(f"Consulta ao Chatbot recebida do IP: {client_ip}")
     # ------------------------------
 
-    # Constrói o histórico de mensagens
+    # Constrói o histórico de mensagens para a API OpenRouter
     messages = []
+    
+    # 1. Adiciona a instrução do sistema
     messages.append({"role": "system", "content": SYSTEM_INSTRUCTION})
 
+    # 2. Processa o histórico existente e a nova mensagem do usuário
     for message in request.history:
+        # OpenRouter usa 'assistant' para a AI
         role = "user" if message.role == "user" else "assistant"
         messages.append({"role": role, "content": message.text})
     
+    # Adiciona o contexto dos dados do Excel se fornecido na última mensagem do histórico
     last_user_prompt = messages[-1]["content"]
     if request.contact_data_sample:
         # --- LGPD (Anonimização / Minimização de Dados) ---
         # O frontend envia apenas uma AMOSTRA, não a lista completa.
+        # Isso protege a privacidade do usuário (Princípio da Minimização).
         # --------------------------------------------------
         data_context = f"\n\n--- DADOS DE CONTEXTO DO EXCEL (JSON stringified) ---\n{request.contact_data_sample}\n--- FIM DOS DADOS DE CONTEXTO ---\n"
         last_user_prompt += data_context
     messages[-1]["content"] = last_user_prompt
 
+    # Prepara o payload para a API OpenRouter (DeepSeek R1T2)
     payload = {
         "model": AI_MODEL,
         "messages": messages,
@@ -302,6 +321,7 @@ async def handle_chat_query(request: ChatRequest, client_request: Request):
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
+            # Implementação de backoff exponencial simples
             max_retries = 3
             delay = 1
             response = None
@@ -327,38 +347,42 @@ async def handle_chat_query(request: ChatRequest, client_request: Request):
 
             
             if response.status_code != 200:
+                print(f"Erro da API OpenRouter: {response.text}")
                 # --- LGPD (Monitoramento) ---
                 logging.error(f"Erro da API OpenRouter (IP: {client_ip}): {response.status_code} - {response.text}")
                 # ------------------------------
                 raise HTTPException(status_code=500, detail=f"Erro ao comunicar com a AI. Código: {response.status_code}")
 
             result = response.json()
+            # Tenta extrair o texto da resposta
             ai_text = result.get("choices", [{}])[0].get("message", {}).get("content")
             
             if not ai_text:
+                print(f"Resposta da AI sem texto: {result}")
                 raise HTTPException(status_code=500, detail="A AI retornou uma resposta inesperada.")
             
-            # COMENTÁRIO DE SEGURANÇA (Anti-Hacking: Higienização de Saída)
-            # Embora o frontend vá higienizar, fazemos uma limpeza básica aqui
-            # para remover caracteres que podem quebrar o JSON/HTML.
-            ai_text_cleaned = ai_text.replace("<", "&lt;").replace(">", "&gt;")
+            # ATUALIZAÇÃO: Não fazemos mais higienização de < > no backend
+            # O frontend (main.js) já faz isso com escapeHtml.
+            # E a IA pode precisar retornar o ícone <i class='fas...'></i>
             
-            return {"response": ai_text_cleaned}
+            return {"response": ai_text} # Retorna o texto bruto da IA
 
     except HTTPException:
-        raise 
+        raise # Rethrow HTTPException
     except Exception as e:
+        print(f"Erro geral no Chatbot: {e}")
         # --- LGPD (Monitoramento / Resposta a Incidentes) ---
         logging.critical(f"Exceção inesperada no Chatbot (IP: {client_ip}): {e}")
         # ------------------------------
         raise HTTPException(status_code=500, detail=f"Erro interno do servidor: {str(e)}")
 
-# AI Column Detection
+# AI Column Detection Endpoint (Modificado para usar DeepSeek R1T2 ou Heuristic)
 @app.post("/api/detect-columns")
 async def detect_columns(request: ColumnDetectionRequest, client_request: Request):
     """Detect name and phone columns using AI or heuristic fallback"""
     client_ip = client_request.client.host
     
+    # Rate limiting
     if not await check_rate_limit(client_ip):
         raise HTTPException(
             status_code=429,
@@ -369,34 +393,40 @@ async def detect_columns(request: ColumnDetectionRequest, client_request: Reques
     logging.info(f"Detecção de colunas iniciada pelo IP: {client_ip}")
     # ------------------------------
     
+    # Tenta usar a AI para detecção de colunas se a chave estiver configurada
     if Config.OPENROUTER_API_KEY:
         try:
+            # Prepare data for AI analysis
             headers_text = ", ".join(request.headers)
             sample_rows = []
             
             # --- LGPD (Minimização de Dados) ---
             # Enviamos apenas os PRIMEIROS 5 registros como amostra.
+            # Nunca enviamos a lista inteira do usuário para a IA.
             # -------------------------------------
-            for row in request.sample_data[:5]:
+            for row in request.sample_data[:5]:  # Send first 5 rows
                 row_text = ", ".join([f"'{k}': '{v}'" for k, v in row.items()])
                 sample_rows.append(row_text)
             
             sample_text = "; ".join(sample_rows)
             
+            # *** CORREÇÃO APLICADA AQUI (da última conversa) ***
+            # System Prompt para detecção de colunas (ATUALIZADO)
             system_prompt = """Você é um analista de dados. Sua tarefa é identificar a coluna de 'nome principal' e 'número de telefone'.
 
             Retorne SOMENTE um objeto JSON válido com este formato exato:
             {"name_key": "nome_da_coluna", "number_key": "nome_da_coluna"}
 
             Regras:
-            - **name_key (Nome Principal)**: Priorize colunas que pareçam ser o nome de um 'aluno' (ex: "Nome do Aluno", "Aluno"). Se não encontrar, procure por um nome genérico (ex: "Nome").
+            - **name_key (Nome Principal)**: Esta é a coluna mais importante. Priorize colunas que pareçam ser o nome de um 'aluno' (ex: "Nome do Aluno", "Aluno", "Nome Aluno"). Se não encontrar uma coluna de aluno, procure por um nome genérico (ex: "Nome", "Name", "Nome Completo").
             - **number_key (Telefone)**: Coluna que contém números de telefone.
             - Use os nomes exatos das colunas fornecidos nos cabeçalhos.
             - Se não tiver certeza, retorne uma string vazia ("")."""
             
             user_prompt = f"""{system_prompt}
             Cabeçalhos: {headers_text}
-            Amostra de dados: {sample_text}
+            Amostra de dados (5 primeiras linhas): {sample_text}
+            
             Identifique as colunas de Nome e Número de Telefone."""
             
             messages = [
@@ -423,11 +453,13 @@ async def detect_columns(request: ColumnDetectionRequest, client_request: Reques
                 )
                 
                 if response.status_code != 200:
+                    # Fallback para o heuristic se a chamada da AI falhar
                     return await heuristic_column_detection(request.headers)
                 
                 result = response.json()
                 content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
                 
+                # Tenta extrair e carregar o JSON (OpenRouter nem sempre garante JSON puro)
                 try:
                     json_match = re.search(r'\{[^}]+\}', content)
                     if json_match:
@@ -435,6 +467,7 @@ async def detect_columns(request: ColumnDetectionRequest, client_request: Reques
                     else:
                         raise json.JSONDecodeError("JSON não encontrado", content, 0)
                     
+                    # Validação final para garantir que as chaves retornadas são válidas
                     name_key = ai_result.get("name_key", "")
                     number_key = ai_result.get("number_key", "")
                     
@@ -444,19 +477,23 @@ async def detect_columns(request: ColumnDetectionRequest, client_request: Reques
                     return {"name_key": name_key, "number_key": number_key}
                         
                 except (json.JSONDecodeError, KeyError) as e:
+                    print(f"AI JSON parsing failed, using heuristic: {e}")
                     logging.warning(f"AI JSON parsing failed, using heuristic: {e}")
                     return await heuristic_column_detection(request.headers)
                     
         except Exception as e:
+            print(f"AI column detection (OpenRouter) error: {e}")
             logging.error(f"AI column detection (OpenRouter) error: {e}")
             return await heuristic_column_detection(request.headers)
             
+    # Fallback para o heuristic se OPENROUTER_API_KEY não estiver configurada
     return await heuristic_column_detection(request.headers)
 
 
 async def heuristic_column_detection(headers: List[str]) -> Dict[str, str]:
     """Fallback heuristic column detection"""
-    name_patterns = ['aluno', 'nome aluno', 'nome_aluno', 'responsavel', 'responsável', 'nome resp', 'name', 'nome']
+    # *** ATUALIZADO: Prioriza 'aluno' na heurística também ***
+    name_patterns = ['aluno', 'nome aluno', 'nome_aluno', 'responsavel', 'responsável', 'nome resp', 'name', 'nome', 'full_name', 'full name', 'customer_name', 'customer name', 'contact_name', 'contact name']
     phone_patterns = ['phone', 'telefone', 'mobile', 'cell', 'whatsapp', 'phone_number', 'phone number', 'celular']
     
     name_key = ""
@@ -511,6 +548,7 @@ async def send_whatsapp_batch(request: WhatsAppSendRequest, client_request: Requ
     """Send WhatsApp messages in batch via Cloud API"""
     client_ip = client_request.client.host
     
+    # Rate limiting
     if not await check_rate_limit(client_ip):
         raise HTTPException(
             status_code=429,
@@ -519,9 +557,11 @@ async def send_whatsapp_batch(request: WhatsAppSendRequest, client_request: Requ
     
     # A validação de `credentials` agora é feita pelo Pydantic (WhatsAppSendRequest)
     
+    # Validate request
     if not request.contacts:
         raise HTTPException(status_code=400, detail="Nenhum contato fornecido")
     
+    # Validate credentials
     credentials = request.credentials
     
     # --- LGPD (Senhas e Autenticação) ---
@@ -537,23 +577,25 @@ async def send_whatsapp_batch(request: WhatsAppSendRequest, client_request: Requ
     logging.info(f"Iniciando Job de Envio (IP: {client_ip}): {job_id} para {len(request.contacts)} contatos.")
     # ------------------------------
     
-    # Inicia a tarefa em background
+    # Start background task
     asyncio.create_task(process_whatsapp_batch(
-        job_id, request.contacts, request.message, credentials.dict()
+        job_id, request.contacts, request.message, credentials.dict() # Converte Pydantic model para dict
     ))
     
     return {
         "jobId": job_id,
         "status": "processing",
         "totalContacts": len(request.contacts),
-        "estimatedTime": len(request.contacts) * 0.1
+        "estimatedTime": len(request.contacts) * 0.1  # 100ms per message estimate
     }
 
 async def process_whatsapp_batch(job_id: str, contacts: List[Dict], message: str, credentials: Dict):
     """Process WhatsApp messages in background"""
     
     # --- LGPD (Prevenção contra Perda / Resposta a Incidentes) ---
-    # O status do job é salvo no Redis.
+    # O status do job é salvo no Redis (um banco de dados rápido).
+    # Se o servidor cair, o status do job (quantos faltam) pode ser
+    # recuperado se o Redis tiver persistência.
     # Usamos `setex` (com expiração) para que os dados não fiquem para sempre
     # (Princípio da Retenção de Dados).
     # -------------------------------------------------------------
@@ -575,13 +617,14 @@ async def process_whatsapp_batch(job_id: str, contacts: List[Dict], message: str
     
     results = []
     batch_size = 10
-    delay_ms = 1000  # 1 segundo entre lotes
+    delay_ms = 1000  # 1 second between batches
     
     for i in range(0, len(contacts), batch_size):
         batch = contacts[i:i + batch_size]
         batch_results = await send_whatsapp_batch_api(batch, message, credentials)
         results.extend(batch_results)
         
+        # Update progress
         if redis_client:
             try:
                 completed = len([r for r in results if r.get("success")])
@@ -597,10 +640,11 @@ async def process_whatsapp_batch(job_id: str, contacts: List[Dict], message: str
             except Exception as e:
                  logging.error(f"Falha ao atualizar Job no Redis (Job: {job_id}): {e}")
         
+        # Wait before next batch
         if i + batch_size < len(contacts):
             await asyncio.sleep(delay_ms / 1000)
     
-    # Marca o job como concluído
+    # Mark job as completed
     if redis_client:
         try:
             completed = len([r for r in results if r.get("success")])
@@ -629,7 +673,8 @@ async def send_whatsapp_batch_api(contacts: List[Dict], message: str, credential
     async with httpx.AsyncClient(timeout=30.0) as client:
         for contact in contacts:
             try:
-                phone = contact.get("cleanedPhone", "").replace("+", "")
+                # Prepare phone number (remove leading '+')
+                phone = contact.get("cleanedPhone", contact.get("phone", "")).replace("+", "")
                 
                 # Validação extra de segurança
                 if not phone.isdigit() or len(phone) < 10:
@@ -642,12 +687,13 @@ async def send_whatsapp_batch_api(contacts: List[Dict], message: str, credential
                     })
                     continue
 
+                # Determine API endpoint
                 phone_number_id = credentials["phoneNumberId"]
                 access_token = credentials["accessToken"]
                 template_name = credentials.get("templateName", "")
                 language_code = credentials.get("languageCode", "pt_BR")
                 
-                # Substitui placeholders
+                # Substitui placeholders na mensagem de texto
                 personalized_message = message.replace("{name}", contact.get("name", ""))
                 
                 # COMENTÁRIO DE SEGURANÇA (Anti-Hacking: Higienização de Saída)
@@ -656,14 +702,18 @@ async def send_whatsapp_batch_api(contacts: List[Dict], message: str, credential
                 personalized_message = re.sub(r'[\x00-\x1F\x7F]', '', personalized_message)
 
                 
+                # Se houver template name, tenta enviar como template. Senão, envia como mensagem de texto.
                 if template_name and template_name.strip() and template_name != 'hello_world':
+                    # Tenta enviar como Template message
                     payload = {
                         "messaging_product": "whatsapp",
                         "to": phone,
                         "type": "template",
                         "template": {
                             "name": template_name,
-                            "language": { "code": language_code },
+                            "language": {
+                                "code": language_code
+                            },
                             "components": [
                                 {
                                     "type": "body",
@@ -675,15 +725,19 @@ async def send_whatsapp_batch_api(contacts: List[Dict], message: str, credential
                         }
                     }
                 else:
+                    # Custom text message (padrão)
                     payload = {
                         "messaging_product": "whatsapp",
                         "to": phone,
                         "type": "text",
-                        "text": { "body": personalized_message }
+                        "text": {
+                            "body": personalized_message
+                        }
                     }
                 
                 # --- LGPD (Criptografia e Comunicação Segura) ---
                 # A chamada é feita para `https://graph.facebook.com`, garantindo SSL/TLS.
+                # O `access_token` vai no Header (padrão OAuth).
                 # ------------------------------------------------
                 response = await client.post(
                     f"https://graph.facebook.com/v18.0/{phone_number_id}/messages",
@@ -729,6 +783,9 @@ async def get_job_status(job_id: str):
     """Get status of a WhatsApp sending job"""
     
     if not redis_client:
+        # Se o Redis não estiver configurado, um trabalho de background deve ser tratado de forma diferente
+        # Neste cenário de trabalho de longa duração, sem Redis, o job não é rastreável.
+        # Vamos lançar um erro informativo.
         # --- LGPD (Monitoramento) ---
         logging.error(f"Tentativa de verificar job {job_id} falhou: Redis não configurado.")
         # ------------------------------
