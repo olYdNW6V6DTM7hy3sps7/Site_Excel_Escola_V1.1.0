@@ -1,0 +1,366 @@
+:root {
+    --primary-color: #6d28d9; /* Violet-700 */
+    --primary-hover: #5b21b6; /* Violet-800 */
+    --primary-light: #ede9fe; /* Violet-100 */
+    --primary-text: #c4b5fd; /* Violet-300 */
+    
+    --secondary-color: #10b981; /* Green-500 */
+    --secondary-hover: #059669; /* Green-600 */
+
+    --danger-color: #ef4444; /* Red-500 */
+    --danger-light: #fee2e2; /* Red-100 */
+
+    --neutral-text: #4b5563; /* Gray-600 */
+    --neutral-light: #f3f4f6; /* Gray-100 */
+    --neutral-border: #d1d5db; /* Gray-300 */
+    
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f9fafb; /* Gray-50 */
+}
+
+/* --- Header Customizado --- */
+.main-header {
+    background-color: white;
+    border-bottom: 1px solid var(--neutral-border);
+    box-shadow: var(--shadow-sm);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+.header-title {
+    color: #1f2937; /* Gray-800 */
+    font-weight: 700;
+}
+
+/* --- Card Principal (Container de Bloco) --- */
+.content-card {
+    background-color: white;
+    border-radius: 12px;
+    border: 1px solid var(--neutral-border);
+    box-shadow: var(--shadow-md);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+}
+.content-card:hover {
+    box-shadow: var(--shadow-lg);
+}
+.card-title {
+    font-size: 1.25rem; /* text-xl */
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--primary-light);
+    padding-bottom: 0.75rem;
+}
+
+/* --- Guia "Passo a Passo" --- */
+.step-guide-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.step-card {
+    display: flex;
+    align-items: center;
+    background-color: var(--neutral-light);
+    padding: 1.5rem;
+    border-radius: 10px;
+    border: 1px solid var(--neutral-border);
+    transition: all 0.3s ease;
+}
+.step-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+}
+.step-icon {
+    font-size: 1.5rem; /* text-2xl */
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    margin-right: 1.5rem;
+    flex-shrink: 0;
+}
+.step-icon.primary {
+    background-color: var(--primary-light);
+    color: var(--primary-color);
+}
+.step-icon.secondary {
+    background-color: #d1fae5; /* Green-100 */
+    color: var(--secondary-color);
+}
+.step-text h3 {
+    font-weight: 600;
+    color: #1f2937; /* Gray-800 */
+    font-size: 1.1rem;
+}
+.step-text p {
+    font-size: 0.9rem;
+    color: var(--neutral-text);
+}
+
+/* Linha conectora (visível apenas em telas médias ou maiores) */
+@media (min-width: 768px) {
+    .step-guide-container {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: flex-start;
+        position: relative;
+        gap: 2rem;
+    }
+    .step-card {
+        flex-direction: column;
+        text-align: center;
+        width: 23%;
+    }
+    .step-icon {
+        margin-right: 0;
+        margin-bottom: 1rem;
+    }
+    /* Linha tracejada conectando os passos */
+    .step-card:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        top: 3.25rem; /* Alinha com o centro do ícone */
+        left: calc(100% + 1rem); /* Posição entre os cards */
+        width: 3rem; /* Largura da linha */
+        border-top: 2px dashed var(--neutral-border);
+        transform: translateX(-50%);
+    }
+}
+@media (max-width: 1023px) and (min-width: 768px) {
+     /* Em tablets, a linha é mais curta */
+    .step-card:not(:last-child)::after {
+        width: 1.5rem;
+    }
+}
+
+
+/* --- Botões --- */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    box-shadow: var(--shadow-sm);
+}
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    box-shadow: var(--shadow-md);
+}
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: white;
+}
+.btn-secondary:hover {
+    background-color: var(--secondary-hover);
+    box-shadow: var(--shadow-md);
+}
+.btn-danger-icon {
+    color: var(--danger-color);
+    font-size: 1.25rem;
+}
+.btn-danger-icon:hover {
+    color: #b91c1c; /* Red-700 */
+}
+
+/* --- Formulários e Inputs --- */
+.form-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--neutral-text);
+    margin-bottom: 0.5rem;
+    display: block;
+}
+.form-select, .form-input, .form-textarea {
+    width: 100%;
+    border: 1px solid var(--neutral-border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+.form-select:focus, .form-input:focus, .form-textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+.form-textarea {
+    min-height: 100px;
+}
+
+/* --- Zona de Upload --- */
+#dropZone {
+    border: 2px dashed var(--neutral-border);
+    border-radius: 12px;
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: var(--neutral-light);
+}
+#dropZone:hover, .drag-over {
+    border-color: var(--primary-color) !important;
+    background-color: var(--primary-light) !important;
+}
+#dropZone i {
+    font-size: 3rem;
+    color: var(--primary-text);
+    margin-bottom: 1rem;
+}
+
+/* --- Tabela de Prévia --- */
+.table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--neutral-border);
+    border-radius: 8px;
+}
+.table-header th {
+    background-color: var(--neutral-light);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--neutral-text);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.table-row {
+    border-bottom: 1px solid var(--neutral-border);
+}
+.table-row:last-child {
+    border-bottom: none;
+}
+.table-row:hover {
+    background-color: #f9fafb; /* Gray-50 */
+}
+.table-cell {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    color: var(--neutral-text);
+}
+.status-valid { color: var(--secondary-color); font-weight: 500; }
+.status-invalid { color: var(--danger-color); font-weight: 500; }
+.status-invalid i { color: var(--danger-color); }
+.status-valid i { color: var(--secondary-color); }
+
+/* --- Chatbot --- */
+.chat-container {
+    box-shadow: var(--shadow-lg);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+#chatToggleBtn {
+    background-color: var(--primary-color);
+    width: 60px;
+    height: 60px;
+    font-size: 1.5rem;
+    border: none;
+}
+#chatToggleBtn:hover {
+    background-color: var(--primary-hover);
+    transform: scale(1.05);
+}
+.chat-header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.75rem 1rem;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+}
+.chat-header h3 {
+    font-weight: 600;
+}
+.chat-messages {
+    background-color: #f7f7f7;
+}
+.user-message {
+    background-color: var(--primary-color);
+}
+.ai-message {
+    background-color: white;
+    border: 1px solid var(--neutral-border);
+}
+#chatInput {
+    border: 1px solid var(--neutral-border);
+    padding: 0.75rem;
+}
+#chatInput:focus {
+    border-color: var(--primary-color);
+    box-shadow: none;
+    outline: none;
+}
+#chatSendBtn {
+    background-color: var(--primary-color);
+}
+#chatSendBtn:hover {
+    background-color: var(--primary-hover);
+}
+#chatSendBtn:disabled {
+    background-color: #9ca3af; /* Gray-400 */
+    opacity: 0.7;
+}
+
+/* --- Outros --- */
+.placeholder-highlight {
+    background: linear-gradient(120deg, var(--primary-color) 0%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 600;
+}
+.modal-backdrop {
+    backdrop-filter: blur(4px);
+}
+.modal-content {
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 1.5rem;
+}
+.progress-bar-bg {
+    background-color: var(--neutral-border);
+}
+.progress-bar {
+    background-color: var(--primary-color);
+    transition: width 0.3s ease;
+}
+
+/* --- NOVAS: Seções de Explicação do Modo --- */
+.mode-explanation {
+    border: 1px solid var(--neutral-border);
+    background-color: var(--neutral-light);
+    padding: 1.5rem;
+    border-radius: 10px;
+}
+.mode-explanation h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1f2937; /* Gray-800 */
+    margin-bottom: 0.5rem;
+}
+.mode-explanation p {
+    font-size: 0.9rem;
+    color: var(--neutral-text);
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+}
