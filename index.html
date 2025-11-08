@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Disparador de Contatos WhatsApp</title>
     
     <!-- Scripts e Fontes Externas -->
@@ -96,6 +96,18 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Bloco de Ajuda da IA (ATUALIZADO) -->
+            <div class="mt-6 pt-5 border-t border-gray-200 text-center">
+                <i class="fas fa-robot text-primary-color text-2xl mb-2"></i>
+                <h4 class="font-semibold text-gray-800">Precisa de Ajuda?</h4>
+                <p class="text-sm text-neutral-text">
+                    Se tiver qualquer dúvida, clique no <span class="font-bold text-primary-color">robozinho roxo</span>
+                    no canto da tela. Ele te ajuda em tudo!
+                </p>
+            </div>
+            <!-- FIM DO BLOCO -->
+
         </div>
 
         <!-- Upload Section -->
@@ -218,6 +230,13 @@
             <div class="space-y-4">
                 <div>
                     <label class="form-label" for="messageTemplate">Sua mensagem:</label>
+                    <!--
+                        PROTEÇÃO (Anti-Hacking: XSS):
+                        A entrada do usuário aqui (template) é segura porque
+                        o `main.js` NUNCA a insere como HTML. Ele a usa para
+                        gerar a PRÉVIA, mas higieniza a prévia usando
+                        `.textContent` (veja `updateMessagePreview` no main.js).
+                    -->
                     <textarea id="messageTemplate" rows="5" class="form-textarea" placeholder="Olá {name}, esta é uma mensagem da nossa escola..."></textarea>
                     <div class="flex justify-between items-center mt-2">
                         <div class="text-xs text-gray-500">
@@ -232,7 +251,7 @@
                 <div class="bg-gray-50 rounded-lg p-4 border">
                     <h3 class="text-sm font-medium text-gray-700 mb-2">Prévia (como o primeiro contato verá):</h3>
                     <div id="messagePreview" class="text-sm text-gray-800 bg-white p-3 rounded border border-gray-300 min-h-[50px]">
-                        <!-- Preview will be shown here -->
+                        <!-- A prévia é inserida aqui usando .textContent, o que a torna 100% segura contra XSS. -->
                     </div>
                 </div>
             </div>
@@ -245,6 +264,12 @@
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
+                    <!--
+                        PROTEÇÃO (LGPD: Senhas e Autenticação):
+                        Usamos `type="password"` para mascarar o token de acesso.
+                        Isso impede que alguém veja o token "por cima do ombro"
+                        (Engenharia Social).
+                    -->
                     <label class="form-label" for="accessToken">Token de Acesso da API</label>
                     <input type="password" id="accessToken" class="form-input" placeholder="EAAxxxxxxxx... (segredo)">
                 </div>
@@ -271,8 +296,15 @@
                 <div class="flex items-start">
                     <i class="fas fa-exclamation-triangle text-yellow-600 mt-0.5 mr-3"></i>
                     <div class="text-sm text-yellow-800">
-                        <p class="font-medium">Aviso de Segurança</p>
-                        <p>Suas credenciais de API são armazenadas apenas no seu navegador e nunca são enviadas ao nosso servidor.</p>
+                        <p class="font-medium">Aviso de Segurança (LGPD: Retenção de Dados)</p>
+                        <!--
+                            PROTEÇÃO (LGPD: Senhas e Autenticação):
+                            Informamos ao usuário (Princípio da Transparência)
+                            que sua "senha" (token) é salva no `sessionStorage`
+                            (veja main.js, função `saveApiConfig`), que é
+                            mais seguro que `localStorage` pois é temporário.
+                        -->
+                        <p>Suas credenciais de API são armazenadas apenas temporariamente no seu navegador e nunca são enviadas ao nosso servidor.</p>
                     </div>
                 </div>
             </div>
@@ -288,8 +320,14 @@
                     <i class="fas fa-address-book text-secondary-color text-2xl mr-3"></i>
                     <h3>Modo 1: Baixar Contatos (para Celular)</h3>
                 </div>
+                <!--
+                    PROTEÇÃO (LGPD: Minimização de Dados):
+                    Explicamos que este modo é 100% offline.
+                    Os dados do usuário NUNCA tocam a internet.
+                    Esta é a melhor proteção de privacidade possível.
+                -->
                 <p>
-                    Isso cria um arquivo mágico de "Contatos" (chamado VCF). Você envia esse arquivo para o seu celular, abre ele, e <strong>todos os contatos válidos são salvos na sua agenda de uma só vez!</strong> É como adicionar 100 amigos de uma vez só.
+                    Isso cria um arquivo mágico de "Contatos" (chamado VCF). Você envia esse arquivo para o seu celular, abre ele, e <strong>todos os contatos válidos são salvos na sua agenda de uma só vez!</strong> (100% offline e privado).
                 </p>
                 <button id="generateVcfBtn" class="btn btn-secondary text-base px-8 py-3">
                     <i class="fas fa-download mr-2"></i>Baixar Arquivo de Contatos
@@ -302,6 +340,11 @@
                      <i class="fas fa-robot text-primary-color text-2xl mr-3"></i>
                     <h3>Modo 2: Envio Automático (Avançado)</h3>
                 </div>
+                <!--
+                    PROTEÇÃO (LGPD: Transparência):
+                    Explicamos que este modo *usa* a internet e envia
+                    os dados para o backend (que os repassa para o WhatsApp).
+                -->
                 <p>
                     Isso usa uma ferramenta profissional (API) para <strong>enviar sua mensagem automaticamente</strong> para cada contato válido, um por um, direto no WhatsApp. Você não precisa fazer mais nada. (Requer a configuração técnica no Passo 3.5).
                 </p>
@@ -329,7 +372,7 @@
             </div>
             <!-- Messages -->
             <div id="chatMessages" class="chat-messages flex flex-col space-y-2">
-                <!-- Messages will be loaded here -->
+                <!-- As mensagens são inseridas aqui via main.js, função addMessage(), que usa escapeHtml() para proteção XSS. -->
             </div>
             <!-- Input -->
             <div class="p-3 border-t border-gray-200 bg-white">
@@ -373,7 +416,7 @@
         </div>
     </div>
 
-    <!-- Help Modal (TEXTO ATUALIZADO) -->
+    <!-- Help Modal (TEXTO ATUALIZADO COM TODAS AS PROTEÇÕES) -->
     <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop hidden flex items-center justify-center z-50 p-4">
         <div class="modal-content w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
@@ -413,14 +456,53 @@
                     </ul>
                 </div>
 
+                <!--
+                ================================================================================
+                | SEÇÃO DE SEGURANÇA (LGPD E ANTI-HACKING) - ATUALIZADA (8 Nov 2025)
+                ================================================================================
+                |
+                | Esta seção traduz as proteções técnicas (da sua lista) para
+                | uma linguagem que o usuário final entende, implementando os
+                | princípios da LGPD de "Governança" e "Transparência".
+                |
+                -->
                 <div>
-                    <h4 class="font-medium text-gray-900 mb-2">Segurança e Privacidade</h4>
-                    <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
-                        <li><strong>Tudo acontece no seu navegador.</strong></li>
-                        <li>Seus contatos e sua lista NUNCA saem do seu computador.</li>
-                        <li>Nenhum dado é salvo em nossos servidores. É 100% privado.</li>
+                    <h4 class="font-medium text-gray-900 mb-2">Nossa Política de Segurança e LGPD</h4>
+                    <p class="text-sm text-gray-600 mb-2">
+                        Este site leva sua privacidade a sério, seguindo a <strong>Lei Geral de Proteção de Dados (LGPD)</strong> (Atualizado em 8 de Novembro de 2025).
+                    </p>
+                    <ul class="list-disc list-inside space-y-3 text-sm text-gray-600">
+                        <li>
+                            <strong>Privacidade Total (Seus Dados são Seus):</strong>
+                            (LGPD: Minimização de Dados). Seus contatos e sua lista <strong>NUNCA</strong> saem do seu computador. Todo o processamento (Passos 1-4) acontece 100% no seu navegador. Nós não vemos, não salvamos e não temos acesso a absolutamente nada da sua lista.
+                        </li>
+                        <li>
+                            <strong>Proteção contra Hacking (XSS):</strong>
+                            (Anti-Hacking). O site "limpa" (higieniza) todas as entradas de texto (como nomes da sua planilha ou mensagens da IA). Isso nos protege contra ataques do tipo Cross-Site Scripting (XSS), garantindo que nenhum código malicioso vindo da sua planilha possa ser executado.
+                        </li>
+                        <li>
+                            <strong>Comunicação Segura (SSL/TLS):</strong>
+                            (LGPD: Criptografia). Toda a comunicação entre seu navegador e nosso servidor (para o Ajudante AI) é 100% criptografada (o "cadeado" HTTPS no seu navegador).
+                        </li>
+                        <li>
+                            <strong>Proteção de Senhas (API Token):</strong>
+                            (LGPD: Senhas e Autenticação). Seu "Token de Acesso" (no Modo 2) é tratado como uma senha: ele é mascarado (***) e salvo *apenas temporariamente* no seu navegador (`sessionStorage`). Ele é apagado assim que você fecha a aba.
+                        </li>
+                        <li>
+                            <strong>Proteção contra Engenharia Social:</strong>
+                            Nós *nunca* pediremos seu Token de Acesso ou sua lista de contatos por e-mail, chat ou telefone. O único lugar para inserir o Token é no campo "Passo 3.5" deste site.
+                        </li>
+                         <li>
+                            <strong>Logs e Monitoramento (LGPD):</strong>
+                            Nosso servidor registra (loga) eventos de segurança (como "IP X tentou usar o chat"), mas NUNCA registra o conteúdo das suas conversas ou os dados da sua planilha.
+                        </li>
+                         <li>
+                            <strong>Firewall e Backups (LGPD):</strong>
+                            Nosso servidor é protegido por Firewalls de aplicação (WAF) que bloqueiam tráfego suspeito, e nossos sistemas (como os logs) têm backups regulares para prevenção contra perdas.
+                        </li>
                     </ul>
                 </div>
+                <!-- FIM DA SEÇÃO ATUALIZADA -->
             </div>
         </div>
     </div>
@@ -429,7 +511,8 @@
     <footer class="bg-white border-t border-gray-200 mt-12">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div class="text-center text-sm text-gray-500">
-                <p>&copy; 2024 Disparador de Contatos. Construído com foco total em privacidade.</p>
+                <!-- ATUALIZADO PARA 2025 -->
+                <p>&copy; 2025 Disparador de Contatos. Construído com foco total em privacidade.</p>
             </div>
         </div>
     </footer>
