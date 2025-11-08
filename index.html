@@ -443,6 +443,26 @@
             </div>
         </div>
     </div>
+    
+    <!-- NOVO: Modal de Confirmação de Envio para IA -->
+    <div id="aiConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop hidden flex items-center justify-center z-[1003] p-4">
+        <div class="modal-content w-full max-w-md">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Confirmar Análise (LGPD)</h3>
+            
+            <div id="aiConfirmText" class="text-sm text-gray-600 mb-6 space-y-3">
+                <!-- Conteúdo inserido via JS -->
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <button id="aiConfirmCancelBtn" class="btn bg-gray-200 text-gray-800 hover:bg-gray-300">
+                    Cancelar
+                </button>
+                <button id="aiConfirmSendBtn" class="btn btn-primary">
+                    <i class="fas fa-paper-plane mr-2"></i>Continuar
+                </button>
+            </div>
+        </div>
+    </div>
 
 
     <!-- Help Modal (ATUALIZADO: Z-index e max-width) -->
@@ -496,7 +516,7 @@
                             <i class="fas fa-eye-slash text-gray-600 w-5 text-center mr-3 mt-1"></i>
                             <div>
                                 <strong class="text-gray-800">Privacidade Total, Anonimização e Pseudonimização</strong>
-                                <p class="text-gray-600">Seus contatos <strong>NUNCA</strong> saem do seu computador (Modo 1) ou são armazenados em nosso servidor (Modo 2). No Modo 2, os dados são repassados diretamente à API do WhatsApp e descartados. Para a IA, enviamos apenas uma pequena *amostra* anonimizada dos dados (Minimização de Dados).</p>
+                                <p class="text-gray-600">Seus contatos <strong>NUNCA</strong> saem do seu computador (Modo 1) ou são armazenados em nosso servidor (Modo 2). No Modo 2, os dados são repassados diretamente à API do WhatsApp e descartados. Para a IA, enviamos apenas uma *amostra* dos dados (Minimização de Dados), e pedimos sua permissão antes de fazê-lo.</p>
                             </div>
                         </div>
 
@@ -561,7 +581,7 @@
                             <div>
                                 <strong class="text-gray-800">Governança e Política (PSI)</strong>
                                 <p class="text-gray-600">Esta própria seção de ajuda serve como parte da nossa Política de Segurança da Informação (PSI), garantindo transparência total (Princípio da Transparência) sobre como protegemos você e seus dados.</p>
-                            </div>
+G                            </div>
                         </div>
 
                     </div>
