@@ -247,12 +247,15 @@ SUAS TAREFAS E CONHECIMENTO SOBRE O SITE:
 3. **REMOÇÃO DE CONTATOS (VIA AI):**
     - O frontend (JavaScript) só consegue lidar com remoção por ID (ex: "remover 15").
     - Pedidos complexos (por nome, status, turma, ou "todos menos X") chegarão a você.
-    - Se o usuário pedir para remover contatos (ex: 'remover o Paulo Sérgio', 'apagar todos os inválidos', 'deletar contatos da turma A', 'apagar todos menos o ID 5'), sua tarefa é analisar o `contact_data_sample` (especificamente os dados de `processing_complete`) e identificar os IDs (o campo `id`) dos contatos que correspondem ao pedido.
+    - **REGRA DE BUSCA (ATUALIZADA):** Se o usuário pedir para remover por nome (ex: 'remover o Paulo Sérgio'), você DEVE procurar esse nome tanto no campo `aluno` quanto no campo `responsavel` da amostra de dados.
+    
+    - **TAREFA DE REMOÇÃO:** Se você encontrar contatos que correspondem ao pedido do usuário (por nome, status, turma, etc.), sua tarefa é identificar os IDs (o campo `id`) dos contatos correspondentes.
     - Na sua resposta de texto, inclua uma lista especial formatada exatamente assim: [DELETE_IDS: 1, 5, 12]
     - **Exemplo 1 (Usuário: 'apagar inválidos'):** 'Encontrei 2 contatos inválidos na amostra. [DELETE_IDS: 2, 7]'
-    - **Exemplo 2 (Usuário: 'remover o Paulo Sérgio'):** 'Encontrei o contato "Paulo Sérgio". [DELETE_IDS: 5]'
+    - **Exemplo 2 (Usuário: 'remover o Paulo Sérgio'):** 'Encontrei o contato "Paulo Sérgio" (ID 5) na coluna de responsáveis. [DELETE_IDS: 5]'
     - **Exemplo 3 (Usuário: 'apagar todos da turma A'):** 'Encontrei 3 contatos da Turma A na amostra. [DELETE_IDS: 1, 3, 8]'
     - **Exemplo 4 (Usuário: 'apagar todos menos o ID 5'):** 'Entendido. Vou preparar todos os outros contatos (da amostra) para remoção. [DELETE_IDS: 1, 2, 3, 4, 6, 7, 8, ...]'
+    
     - Baseie-se nos campos disponíveis na amostra: `id`, `aluno`, `responsavel`, `turma`, `status` (que pode ser 'valid' ou 'invalid').
     - Se você não encontrar nenhum contato que corresponda ao pedido, apenas responda normalmente, *sem* a lista [DELETE_IDS:].
 
@@ -309,7 +312,7 @@ async def handle_chat_query(request: ChatRequest, client_request: Request):
         "model": AI_MODEL,
         "messages": messages,
         "temperature": 0.5,
-        "max_tokens": 512
+        # ATUALIZAÇÃO: Linha `max_tokens` removida completamente
     }
     
     headers = {
@@ -448,7 +451,7 @@ async def detect_columns(request: ColumnDetectionRequest, client_request: Reques
                         "model": AI_MODEL,
                         "messages": messages,
                         "temperature": 0.1,
-                        "max_tokens": 150
+                        # ATUALIZAÇÃO: Linha `max_tokens` removida completamente
                     }
                 )
                 
