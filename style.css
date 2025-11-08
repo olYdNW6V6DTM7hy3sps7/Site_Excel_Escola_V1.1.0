@@ -326,28 +326,8 @@ body {
     border-bottom-left-radius: 4px; /* Estilo "balão" */
 }
 
-/* NOVO: Botão de deleção dentro do chat */
-.chat-delete-btn {
-    background-color: var(--danger-color);
-    color: white;
-    padding: 0.25rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    margin-top: 0.75rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
-}
-.chat-delete-btn:hover {
-    background-color: #b91c1c; /* Red-700 */
-    box-shadow: var(--shadow-sm);
-}
-.chat-delete-btn:disabled {
-    background-color: #9ca3af; /* Gray-400 */
-    opacity: 0.7;
-    cursor: not-allowed;
-}
+/* ATUALIZAÇÃO: Botão de deleção removido (não é mais necessário) */
+/* .chat-delete-btn { ... } */
 
 
 #chatInput {
