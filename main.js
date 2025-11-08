@@ -1,10 +1,10 @@
 // WhatsApp Bulk Contact Manager & Messenger
 // Main JavaScript Module
 // ATUALIZADO: 8 de Novembro de 2025
-// - Remoção de contatos via IA (com confirmação detalhada)
-// - Chatbot com design dinâmico e menor
-// - Proteção XSS em todas as saídas de dados
-// - NOVO: Botão de deleção no chat
+// - NOVO: Lógica de "Integração Mista"
+// - A IA agora recebe uma amostra grande (até 200 contatos)
+// - Novo modal de confirmação para envio de dados/tokens para a IA
+// - IA atua como "tradutora" de comandos complexos para `[DELETE_IDS: ...]`
 
 // ** VARIÁVEL DE AMBIENTE DA API **
 const API_BASE_URL = 'https://site-excel-escola-v1-1-0.onrender.com';
@@ -18,13 +18,11 @@ class WhatsAppBulkManager {
         this.mode = 'vcf';
         this.chatHistory = []; 
         
-        // Regex estrito para deleção via JS (apenas IDs)
+        // Regex para deleção simples por ID (única lógica de deleção no JS)
         this.simpleDeleteRegex = /(remover|apagar|deletar|excluir)\s+(?:#|linha|id)?\s*(\d+)$/i;
         
-        // NOVO: Regex para encontrar o botão de deleção da IA
-        // Isso nos permite separar o HTML seguro (botão) do texto do usuário (que precisa ser higienizado)
-        this.chatButtonRegex = /<button class='chat-delete-btn' data-delete-id='(\d+)'>.*?<\/button>/;
-
+        // Armazena a mensagem pendente enquanto aguarda a confirmação da IA
+        this.pendingAiMessage = "";
 
         this.initializeElements();
         this.bindEvents();
@@ -91,6 +89,13 @@ class WhatsAppBulkManager {
         this.confirmText = document.getElementById('confirmText'); // Agora é um DIV
         this.confirmActionBtn = document.getElementById('confirmActionBtn');
         this.confirmCancelBtn = document.getElementById('confirmCancelBtn');
+        
+        // NOVO: Modal de Confirmação de Envio para IA
+        this.aiConfirmModal = document.getElementById('aiConfirmModal');
+        this.aiConfirmText = document.getElementById('aiConfirmText');
+        this.aiConfirmSendBtn = document.getElementById('aiConfirmSendBtn');
+        this.aiConfirmCancelBtn = document.getElementById('aiConfirmCancelBtn');
+
 
         // Chatbot elements
         this.chatToggleBtn = document.getElementById('chatToggleBtn');
@@ -137,7 +142,7 @@ class WhatsAppBulkManager {
         document.getElementById('closeHelp').addEventListener('click', () => this.hideModal('helpModal'));
         document.getElementById('closeProgress').addEventListener('click', () => this.hideModal('progressModal'));
 
-        // Eventos do Modal de Confirmação
+        // Eventos do Modal de Confirmação (Deleção)
         this.confirmCancelBtn.addEventListener('click', () => this.hideModal('confirmationModal'));
         this.confirmActionBtn.addEventListener('click', () => {
             if (this.pendingConfirmAction) {
@@ -145,6 +150,19 @@ class WhatsAppBulkManager {
             }
             this.hideModal('confirmationModal');
             this.pendingConfirmAction = null;
+        });
+
+        // NOVO: Eventos do Modal de Confirmação (Envio IA)
+        this.aiConfirmCancelBtn.addEventListener('click', () => {
+            this.hideModal('aiConfirmModal');
+            this.addMessage("Envio para a IA cancelado.", 'ai');
+        });
+        this.aiConfirmSendBtn.addEventListener('click', () => {
+            this.hideModal('aiConfirmModal');
+            if (this.pendingAiMessage) {
+                this.callChatAPI(this.pendingAiMessage); // Chama a API de verdade
+                this.pendingAiMessage = ""; // Limpa a mensagem pendente
+            }
         });
 
 
@@ -196,19 +214,51 @@ class WhatsAppBulkManager {
         this.chatInput.value = '';
         this.chatSendBtn.disabled = true;
 
-        // ATUALIZAÇÃO: A verificação agora é síncrona e mais rápida
-        const deletionHandled = this.checkDeletionIntent(userMessage);
+        // --- ATUALIZAÇÃO: Lógica de "Integração Mista" ---
+
+        // 1. O JS tenta lidar com a lógica simples ("remover #15")
+        const simpleHandled = this.checkSimpleDeletionJS(userMessage);
+        if (simpleHandled) return; // O JS cuidou disso (rápido)
         
-        if (!deletionHandled) {
-            // Se não for uma remoção SIMPLES (por ID), chama a IA
-            this.callChatAPI(userMessage);
-        }
+        // 2. Se não, é uma pergunta complexa ou normal.
+        // Prepara a chamada para a IA, mas pede confirmação primeiro.
+        this.prepareAndConfirmAiCall(userMessage);
+    }
+    
+    // NOVO: Pede confirmação antes de enviar dados para a IA
+    prepareAndConfirmAiCall(userMessage) {
+        // Guarda a mensagem que o usuário quer enviar
+        this.pendingAiMessage = userMessage; 
+        
+        // Pega a amostra grande para calcular o tamanho
+        const sampleData = this.getContactDataSample(true); // true = get large sample
+        const sampleJson = JSON.stringify(sampleData);
+        
+        // Cálculo aproximado de tokens (1 token ~ 4 caracteres)
+        const approxTokens = Math.ceil(sampleJson.length / 4);
+        
+        // Quantos contatos estão na amostra
+        const sampleCount = sampleData.contact_sample.length;
+        const totalCount = this.processedContacts.length;
+
+        // Monta a mensagem de confirmação
+        const messageHtml = `
+            <p>Sua pergunta precisa ser analisada pela IA juntamente com uma amostra dos seus dados.</p>
+            <ul class="list-disc list-inside text-sm my-3 bg-gray-100 p-3 rounded-md">
+                <li><strong>Amostra a Enviar:</strong> ${sampleCount} de ${totalCount} contatos</li>
+                <li><strong>Tamanho Estimado:</strong> ~${approxTokens} tokens</li>
+            </ul>
+            <p class="font-bold">Deseja continuar e enviar esta informação para a IA?</p>
+            <p class="text-xs text-gray-500 mt-2">(Seus dados de amostra são usados apenas para esta análise e não são armazenados.)</p>
+        `;
+        
+        this.aiConfirmText.innerHTML = messageHtml;
+        this.showModal('aiConfirmModal');
     }
 
-    // ATUALIZAÇÃO: Função agora é síncrona e só lida com IDs
-    checkDeletionIntent(message) {
-        // Regex agora está no construtor (this.simpleDeleteRegex)
-        // Só captura comandos como "remover 15" ou "apagar #15"
+
+    // ATUALIZAÇÃO: checkSimpleDeletionJS (lida apenas com IDs)
+    checkSimpleDeletionJS(message) {
         const match = message.match(this.simpleDeleteRegex);
 
         if (match) {
@@ -216,7 +266,6 @@ class WhatsAppBulkManager {
             const targetId = parseInt(targetIdStr, 10);
             
             if (isNaN(targetId) || targetId <= 0) {
-                 // Caso estranho onde o regex captura algo não-numérico (improvável)
                  this.addMessage(`O ID "${this.escapeHtml(targetIdStr)}" não parece ser um número de linha válido.`, 'ai');
                  return true; // Intenção tratada (com falha)
             }
@@ -232,15 +281,12 @@ class WhatsAppBulkManager {
                 const alunoKey = this.alunoColumn.value;
                 const contactName = (alunoKey ? contact[alunoKey] : `Linha ${targetId}`) || `Linha ${targetId}`;
 
-                // ATUALIZAÇÃO: A mensagem de confirmação agora vai para o innerHTML
                 const confirmationMessage = `<p>Você pediu para remover o ID #${targetId}: <strong>${this.escapeHtml(contactName)}</strong>. Confirma?</p>`;
 
-                // Mostra o modal de confirmação
                 this.showConfirmationModal(
                     'Remover Contato',
                     confirmationMessage,
                     () => {
-                        // ATUALIZAÇÃO: Chama a nova função de remoção em lote
                         this.removeContactsBatch([originalIndex]);
                         this.addMessage(`Entendido. O contato "${this.escapeHtml(contactName)}" (ID ${targetId}) foi removido.`, 'ai');
                     }
@@ -252,13 +298,12 @@ class WhatsAppBulkManager {
                 return true; // Intenção tratada (com falha)
             }
         }
-        // Se não deu match, é um comando complexo (ex: "remover Paulo")
-        // ou um chat normal. Deixa a IA decidir.
         return false; 
     }
 
-    // ATUALIZAÇÃO: addMessage agora lida com HTML (botões)
     addMessage(text, role, isSilent = false) {
+        // ATUALIZAÇÃO: A IA não envia mais botões, removemos a lógica do botão
+        
         let cleanedText = text;
         if (role === 'ai') {
             cleanedText = text.replace(/[*#]/g, ''); // Remove todos os * e #
@@ -280,121 +325,83 @@ class WhatsAppBulkManager {
         const bubble = document.createElement('div');
         bubble.className = `message-bubble ${role === 'user' ? 'user-message' : 'ai-message'}`;
 
-        // --- NOVO: LÓGICA DE SEGURANÇA PARA BOTÕES ---
-        // 1. Procura pelo nosso botão de deleção seguro
-        let buttonHtml = '';
-        const match = cleanedText.match(this.chatButtonRegex);
-        if (match && role === 'ai') { // Só confia em botões vindos da IA
-            buttonHtml = match[0]; // Salva o HTML do botão
-            cleanedText = cleanedText.replace(this.chatButtonRegex, ''); // Remove o botão do texto
-        }
-        
-        // 2. Higieniza o TEXTO RESTANTE (previne XSS)
+        // Higieniza o TEXTO (previne XSS)
         const formattedText = this.escapeHtml(cleanedText).replace(/\n/g, '<br>');
         
-        // 3. Insere o texto higienizado + o HTML do botão (que é seguro)
-        bubble.innerHTML = formattedText + buttonHtml;
-        
-        // 4. Se o botão foi inserido, anexa o event listener a ele
-        if (buttonHtml) {
-            const deleteBtn = bubble.querySelector('.chat-delete-btn');
-            if (deleteBtn) {
-                this.handleChatDeleteClick(deleteBtn);
-            }
-        }
-        // --- FIM DA LÓGICA DE BOTÕES ---
+        // Insere o texto higienizado
+        bubble.innerHTML = formattedText;
 
         messageDiv.appendChild(bubble);
         this.chatMessages.appendChild(messageDiv);
         this.scrollToBottom();
     }
     
-    // NOVO: Anexa o listener ao botão do chat
-    handleChatDeleteClick(button) {
-        button.addEventListener('click', (e) => {
-            const id = e.target.getAttribute('data-delete-id');
-            const originalIndex = parseInt(id, 10) - 1;
-            
-            if (isNaN(originalIndex) || originalIndex < 0) {
-                this.showError("Erro no ID do botão de deleção.");
-                return;
-            }
-            
-            // Desabilita o botão para evitar clique duplo
-            e.target.disabled = true;
-            e.target.textContent = "Confirmando...";
-            
-            // Reutiliza o modal de confirmação final
-            this.confirmRemoveContact(originalIndex);
-        });
-    }
-
-    
     scrollToBottom() {
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }
     
-    getContactDataSample() {
-        // Se os contatos ainda não foram processados, envie uma amostra dos dados brutos
-        if (this.processedContacts.length === 0) {
-            if (this.contacts.length === 0) return null;
-            // Envia apenas as 5 primeiras linhas de dados brutos
-            const sample = this.contacts.slice(0, 5);
-            // Retorna como JSON stringificado para o backend
-            return JSON.stringify({
-                status: "processing_not_started",
-                sample_data: sample,
-                total_contacts: this.contacts.length
-            }, null, 2);
-        }
+    // ATUALIZAÇÃO: getContactDataSample agora pode retornar amostra pequena ou grande
+    getContactDataSample(getLargeSample = false) {
         
-        // Se os contatos foram processados, envie um resumo inteligente
-        const validContacts = this.processedContacts.filter(c => c.status !== 'invalid');
-        const invalidContacts = this.processedContacts.filter(c => c.status === 'invalid');
-
-        // Pega amostras de ambos
-        const validSample = validContacts.slice(0, 5);
-        const invalidSample = invalidContacts.slice(0, 10); // Envia mais inválidos, pois são mais prováveis de serem perguntados
-
+        if (this.contacts.length === 0) return null;
+        
+        const MAX_SAMPLE_SIZE = 200; // Limite da amostra grande
+        const SMALL_SAMPLE_SIZE = 5; // Limite da amostra pequena
+        
         // Pega as colunas mapeadas para enviar os dados corretos
         const alunoKey = this.alunoColumn.value;
         const respKey = this.responsavelColumn.value;
         const turmaKey = this.turmaColumn.value;
         const phoneKey = this.phoneColumn.value;
 
+        // Helper para formatar o contato
+        // USA O ID (índice + 1) DA LISTA PROCESSADA (que vem de this.contacts)
+        const mapContact = (c) => ({
+            id: c.id, // O 'id' aqui é (originalIndex + 1)
+            aluno: c.originalData[alunoKey] || '',
+            responsavel: c.originalData[respKey] || '',
+            turma: c.originalData[turmaKey] || '',
+            telefone_original: c.originalData[phoneKey] || '',
+            telefone_formatado: c.cleanedPhone,
+            status: c.status
+        });
+
+        // Se for a chamada de confirmação, envia a amostra grande
+        if (getLargeSample) {
+            // Pega os primeiros 200 contatos da lista processada
+            const sample = this.processedContacts.slice(0, MAX_SAMPLE_SIZE).map(mapContact);
+            return {
+                status: "processing_complete",
+                total_contacts: this.processedContacts.length,
+                contact_sample: sample // Envia a lista grande
+            };
+        }
+        
+        // --- Senão, é a chamada de contexto inicial (pequena) ---
+        // (Não está sendo usado no fluxo atual, mas é bom manter)
+        const validContacts = this.processedContacts.filter(c => c.status !== 'invalid');
+        const invalidContacts = this.processedContacts.filter(c => c.status === 'invalid');
+
+        const validSample = validContacts.slice(0, SMALL_SAMPLE_SIZE).map(mapContact);
+        const invalidSample = invalidContacts.slice(0, SMALL_SAMPLE_SIZE * 2).map(mapContact); // 10 inválidos
+
         const summary = {
             status: "processing_complete",
             total_contacts: this.processedContacts.length,
             total_valid: validContacts.length,
             total_invalid: invalidContacts.length,
-            // Envia os 10 primeiros contatos inválidos
-            invalid_contacts_sample: invalidSample.map(c => ({
-                id: c.id,
-                aluno: c.originalData[alunoKey] || '',
-                responsavel: c.originalData[respKey] || '',
-                turma: c.originalData[turmaKey] || '',
-                telefone_original: c.originalData[phoneKey] || '',
-                status: c.status
-            })),
-            // Envia os 5 primeiros contatos válidos
-            valid_contacts_sample: validSample.map(c => ({
-                id: c.id,
-                aluno: c.originalData[alunoKey] || '',
-                responsavel: c.originalData[respKey] || '',
-                turma: c.originalData[turmaKey] || '',
-                telefone_formatado: c.cleanedPhone,
-                status: c.status
-            }))
+            invalid_contacts_sample: invalidSample,
+            valid_contacts_sample: validSample
         };
         
-        // Retorna como JSON stringificado para o backend
-        return JSON.stringify(summary, null, 2);
+        return summary;
     }
     
-    async callChatAPI(userMessage, isInitial = false) {
+    async callChatAPI(userMessage) {
         this.chatStatus.classList.remove('hidden');
         
-        const dataSample = this.getContactDataSample();
+        // Pega a AMOSTRA GRANDE para enviar
+        const dataSample = this.getContactDataSample(true); // true = get large sample
         
         // O histórico inclui a mensagem atual do usuário (já adicionada via addMessage)
         const historyPayload = this.chatHistory;
@@ -402,7 +409,7 @@ class WhatsAppBulkManager {
         const payload = {
             message: userMessage,
             history: historyPayload,
-            contact_data_sample: dataSample
+            contact_data_sample: JSON.stringify(dataSample) // Envia a amostra grande como JSON
         };
 
         try {
@@ -429,7 +436,7 @@ class WhatsAppBulkManager {
             const data = await response.json();
             const aiResponseText = data.response;
 
-            // ATUALIZAÇÃO: Verificar se a IA mandou uma ordem de deleção em LOTE
+            // ATUALIZAÇÃO: Verificar se a IA traduziu para [DELETE_IDS: ...]
             const deleteMatch = aiResponseText.match(/\[DELETE_IDS:\s*([\d,\s]+)\]/);
 
             if (deleteMatch && deleteMatch[1]) {
@@ -445,7 +452,7 @@ class WhatsAppBulkManager {
                 // Pega a mensagem da IA, limpando a tag de deleção
                 const messageToUser = aiResponseText.replace(deleteMatch[0], '').trim();
 
-                // 1. Adiciona a mensagem da IA (ex: "Entendido, preparei 5 contatos...")
+                // 1. Adiciona a mensagem da IA (ex: "Entendido, preparei 127 contatos...")
                 this.addMessage(messageToUser, 'ai');
 
                 // 2. Monta a lista de detalhes para confirmação
@@ -455,22 +462,22 @@ class WhatsAppBulkManager {
                 // Pega as colunas mapeadas
                 const alunoKey = this.alunoColumn.value;
                 const respKey = this.responsavelColumn.value;
-                const turmaKey = this.turmaColumn.value;
-                const phoneKey = this.phoneColumn.value;
 
                 for (const index of originalIndexesToRemove) {
                     const contact = this.contacts[index]; // Pega da lista original
                     if (contact) {
-                        // Pega os dados das colunas corretas
-                        const aluno = this.escapeHtml(contact[alunoKey] || 'N/A');
-                        const responsavel = this.escapeHtml(contact[respKey] || 'N/A');
-                        const turma = this.escapeHtml(contact[turmaKey] || 'N/A');
-                        const telefone = this.escapeHtml(contact[phoneKey] || 'N/A');
-                        
-                        // Adiciona na lista HTML
-                        detailsHtml += `<li><strong>${aluno}</strong> (Resp: ${responsavel}, Turma: ${turma}, Tel: ${telefone})</li>`;
+                        // Mostra os 10 primeiros, depois "... e mais X"
+                        if (count < 10) {
+                            const aluno = this.escapeHtml(contact[alunoKey] || 'N/A');
+                            const responsavel = this.escapeHtml(contact[respKey] || 'N/A');
+                            detailsHtml += `<li><strong>${aluno}</strong> (Resp: ${responsavel})</li>`;
+                        }
                         count++;
                     }
+                }
+                
+                if (count > 10) {
+                     detailsHtml += `<li>... e mais ${count - 10} contato(s).</li>`;
                 }
                 detailsHtml += '</ul>';
 
@@ -478,7 +485,7 @@ class WhatsAppBulkManager {
                 // 3. Pede confirmação
                 if (count > 0) {
                     // Monta a mensagem final para o modal
-                    const confirmationMessage = `<p>A IA preparou <strong>${count} contato(s)</strong> para remoção em lote. Por favor, confirme os detalhes abaixo:</p> ${detailsHtml}`;
+                    const confirmationMessage = `<p>A IA traduziu seu comando e preparou <strong>${count} contato(s)</strong> para remoção em lote. Confirma?</p> ${detailsHtml}`;
                     
                     this.showConfirmationModal(
                         'Remoção em Lote via IA',
@@ -489,8 +496,7 @@ class WhatsAppBulkManager {
                     );
                 }
             } else {
-                // Resposta normal da IA (sem deleção em lote)
-                // A função addMessage VAI procurar por um botão de deleção individual
+                // Resposta normal da IA (sem deleção)
                 this.addMessage(aiResponseText, 'ai');
             }
 
