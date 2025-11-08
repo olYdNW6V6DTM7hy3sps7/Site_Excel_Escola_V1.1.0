@@ -270,17 +270,18 @@ async def detect_columns(request: ColumnDetectionRequest, client_request: Reques
             
             sample_text = "; ".join(sample_rows)
             
-            # System Prompt para detecção de colunas
-            system_prompt = """Você é um analista de dados. Analise os cabeçalhos e a amostra de dados fornecidos para identificar as colunas que contêm nomes de pessoas/empresas e números de telefone.
+            # *** CORREÇÃO APLICADA AQUI (da última conversa) ***
+            # System Prompt para detecção de colunas (ATUALIZADO)
+            system_prompt = """Você é um analista de dados. Sua tarefa é identificar a coluna de 'nome principal' e 'número de telefone'.
 
             Retorne SOMENTE um objeto JSON válido com este formato exato:
             {"name_key": "nome_da_coluna", "number_key": "nome_da_coluna"}
 
             Regras:
-            - name_key: Coluna que contém nomes.
-            - number_key: Coluna que contém números de telefone.
+            - **name_key (Nome Principal)**: Esta é a coluna mais importante. Priorize colunas que pareçam ser o nome de um 'aluno' (ex: "Nome do Aluno", "Aluno", "Nome Aluno"). Se não encontrar uma coluna de aluno, procure por um nome genérico (ex: "Nome", "Name", "Nome Completo").
+            - **number_key (Telefone)**: Coluna que contém números de telefone.
             - Use os nomes exatos das colunas fornecidos nos cabeçalhos.
-            - Se não tiver certeza ou a coluna não existir, retorne uma string vazia ("")."""
+            - Se não tiver certeza, retorne uma string vazia ("")."""
             
             user_prompt = f"""{system_prompt}
             Cabeçalhos: {headers_text}
@@ -349,25 +350,52 @@ async def detect_columns(request: ColumnDetectionRequest, client_request: Reques
 
 async def heuristic_column_detection(headers: List[str]) -> Dict[str, str]:
     """Fallback heuristic column detection"""
-    name_patterns = ['name', 'nome', 'full_name', 'full name', 'customer_name', 'customer name', 'contact_name', 'contact name']
+    # *** ATUALIZADO: Prioriza 'aluno' na heurística também ***
+    name_patterns = ['aluno', 'nome aluno', 'nome_aluno', 'name', 'nome', 'full_name', 'full name', 'customer_name', 'customer name', 'contact_name', 'contact name']
     phone_patterns = ['phone', 'telefone', 'mobile', 'cell', 'whatsapp', 'phone_number', 'phone number', 'celular']
     
     name_key = ""
     number_key = ""
     
-    for header in headers:
-        header_lower = header.lower()
-        
-        # Check for name patterns
-        for pattern in name_patterns:
-            if pattern in header_lower:
+    # Busca por nome (com prioridade)
+    for pattern in name_patterns:
+        for header in headers:
+            header_lower_simple = header.lower().replace("_", " ")
+            if pattern == header_lower_simple:
                 name_key = header
                 break
-        
-        # Check for phone patterns
-        for pattern in phone_patterns:
-            if pattern in header_lower:
+        if name_key:
+            break
+            
+    # Busca por telefone (com prioridade)
+    for pattern in phone_patterns:
+        for header in headers:
+            header_lower_simple = header.lower().replace("_", " ")
+            if pattern == header_lower_simple:
                 number_key = header
+                break
+        if number_key:
+            break
+
+    # Fallback (se a busca exata falhou, tenta 'in')
+    if not name_key:
+        for header in headers:
+            header_lower = header.lower()
+            for pattern in name_patterns:
+                if pattern in header_lower:
+                    name_key = header
+                    break
+            if name_key:
+                break
+                
+    if not number_key:
+        for header in headers:
+            header_lower = header.lower()
+            for pattern in phone_patterns:
+                if pattern in header_lower:
+                    number_key = header
+                    break
+            if number_key:
                 break
     
     return {"name_key": name_key, "number_key": number_key}
