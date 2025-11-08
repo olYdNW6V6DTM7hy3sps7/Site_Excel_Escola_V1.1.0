@@ -218,83 +218,163 @@ async def health_check():
         services=services_status
     )
 
-# Deep Prompt/System Instruction para o Chatbot (ATUALIZADO)
+
+# --- ATUALIZAÇÃO: Nova Lógica de Normalização de Texto ---
+def normalize_text(text: Optional[str]) -> str:
+    if not text:
+        return ""
+    try:
+        # NFD: Decompõe caracteres (ex: 'ç' -> 'c' + '̧')
+        text = unicodedata.normalize("NFD", text.lower())
+        # a.encode('ascii', 'ignore'): Remove caracteres não-ascii (acentos decompostos)
+        # b.decode('utf-8'): Converte de volta para string
+        text = text.encode("ascii", "ignore").decode("utf-8")
+        # Remove símbolos comuns
+        text = re.sub(r"[ºª.,()/-]", "", text)
+        return text.strip()
+    except Exception:
+        return "" # Retorna vazio em caso de falha
+
+# --- ATUALIZAÇÃO: Novo Prompt de Sistema para Busca Paginada ---
 SYSTEM_INSTRUCTION = """
-Você é o "Ajudante Geral a AI que pensa por você", um assistente de IA e um "Tradutor de Comandos" focado em ajudar o usuário a gerenciar listas de contatos para WhatsApp.
+Você é o "Ajudante Geral a AI que pensa por você", um assistente de IA focado em ajudar o usuário a gerenciar listas de contatos.
 
-SUA PERSONALIDADE:
-1. Apresente-se sempre como: "Ajudante Geral a AI que pensa por você".
-2. Seja prestativo, informativo, conciso e use um tom profissional e amigável.
-3. Fale exclusivamente em Português do Brasil.
+SUA TAREFA é analisar o pedido do usuário (query) e compará-lo com um LOTE de contatos (`contact_sample`). Você está em um loop de busca paginada.
 
-SUAS TAREFAS:
-1. **Chat Normal:** Se o usuário perguntar algo (ex: "o que são contatos inválidos?"), responda normalmente.
-2. **Tradução de Deleção (TAREFA PRINCIPAL):**
-   - O usuário fará pedidos de deleção complexos (ex: "remover todos menos o Paulo Sérgio", "apagar turma 3A", "deletar inválidos").
-   - O frontend (JavaScript) NÃO entende esses comandos, mas ele entende UMA tag: `[DELETE_IDS: ...]`.
-   - **Sua tarefa é ser o "tradutor"**: Converta o pedido humano em uma lista de IDs para a tag.
+SUA RESPOSTA DEVE SER UMA DAS 4 OPÇÕES ABAIXO, E NADA MAIS:
 
-CONTEXTO DOS DADOS:
-- Você receberá os dados em `contact_data_sample`. Este JSON conterá:
-  - `status`: "processing_complete"
-  - `total_contacts`: O número total na lista do usuário (ex: 128)
-  - `contact_sample`: Uma amostra GRANDE (até 200) de contatos.
-- Cada contato na `contact_sample` terá:
-  - `id`: O ID numérico (de 1 a 128). Este é o ID que você DEVE usar na tag `[DELETE_IDS:]`.
-  - `aluno`: Nome do aluno.
-  - `responsavel`: Nome do responsável.
-  - `turma`: Turma do aluno.
-  - `status`: "valid" ou "invalid".
-  - `telefone_original`: O telefone como estava na planilha.
-  - `telefone_formatado`: O telefone limpo (+55...).
+---
+OPÇÃO 1: O usuário fez uma pergunta de CHAT NORMAL (ex: "o que é VCF?", "olá").
+- Neste caso, apenas responda a pergunta normalmente.
+- Exemplo: "Um arquivo VCF (vCard) é um formato padrão para salvar contatos."
 
-**REGRAS DE TRADUÇÃO DE DELEÇÃO (FLUXO ÚNICO):**
+---
+OPÇÃO 2: O usuário pediu para "remover todos exceto X" (ex: "apagar todos menos o Paulo Sérgio 3 D.S").
+- Sua tarefa é encontrar o ID de "X" (Paulo Sérgio).
+- Faça uma busca flexível (ignore acentos, maiúsculas/minúsculas) pelo nome "Paulo Sérgio 3 D.S" nos campos `aluno`, `responsavel` e `turma` do `contact_sample`.
+- Se você encontrar UM (e apenas um) contato correspondente (ex: ID 455):
+    - Responda *apenas* com a tag: `[SEARCH_FOUND_KEEP_ID: 455]`
+    - NÃO adicione nenhum outro texto.
+- Se você encontrar MÚLTIPLOS contatos (ex: 3 "Paulo Sérgio"):
+    - Responda com um aviso de ambiguidade (NÃO use tags).
+    - Exemplo: "Sua busca por 'Paulo Sérgio' é ambígua, pois encontrei 3 contatos neste lote. Por favor, seja mais específico."
+- Se você NÃO encontrar o contato neste lote:
+    - Responda *apenas* com a tag: `[SEARCH_PAGE_FAIL]`
 
-1.  **Analise o Pedido:** O usuário quer remover 'todos da turma A', 'todos inválidos', 'o aluno X', 'todos menos o Paulo Sérgio'?
-2.  **Seja Flexível (Busca Ampla):**
-    - Ao procurar por nomes (ex: "Paulo Sérgio"), **ignore acentos, maiúsculas/minúsculas e símbolos**.
-    - Procure o nome nos campos `aluno` E `responsavel`.
-    - (Ex: "paulo sergio 3 d s" deve corresponder a Aluno: "Paulo Sérgio", Turma: "3º D.S.")
-3.  **Encontre os IDs:**
-    - Percorra a `contact_sample` e colete os `id`s de TODOS os contatos que correspondem ao critério.
-    - Se o pedido for "remover todos menos o Paulo Sérgio", sua lógica é: "Encontre o `id` do Paulo Sérgio (ex: 55). Agora, colete os IDs de todos os *outros* contatos na amostra (ex: 1, 2, ... 54, 56, ... 128)."
-4.  **Responda com a Tag:**
-    - Se você encontrou contatos para remover, sua resposta DEVE ser:
-      `[Frase de confirmação para o usuário]. [DELETE_IDS: id1, id2, id3, ...]`
-    - **Exemplo 1 (Usuário: "remover inválidos"):**
-      `Encontrei 3 contatos inválidos na amostra. [DELETE_IDS: 5, 12, 30]`
-    - **Exemplo 2 (Usuário: "remover Paulo Sérgio"):**
-      `Encontrei o contato [ID: 55] (Aluno: "Paulo Sérgio"). [DELETE_IDS: 55]`
-    - **Exemplo 3 (Usuário: "apagar todos menos o Paulo Sérgio da turma 3A"):**
-      (Você encontra o ID 55)
-      `Entendido. Vou preparar a remoção de todos os outros 127 contatos (baseado no total), mantendo o "Paulo Sérgio" (ID 55). [DELETE_IDS: 1, 2, ... 54, 56, ... 128]`
-      (Nota: Para este comando, você pega o `total_contacts` e o ID da exceção, e gera a lista completa).
-5.  **Se Não Encontrar:**
-    - Se o usuário pedir por "Maria" e você não encontrar (mesmo com a busca flexível), apenas responda:
-      `Não encontrei nenhum contato com o nome "Maria" na amostra de dados fornecida. Por favor, verifique se o nome está correto.`
-    - **NÃO** invente IDs ou envie uma tag `[DELETE_IDS:]` vazia.
-    - **NÃO** peça para ele confirmar (ex: "Você quis dizer...?"). Apenas traduza ou diga que não encontrou.
+---
+OPÇÃO 3: O usuário pediu para "remover contatos específicos" (ex: "remover turma 3A", "apagar inválidos", "deletar João Silva").
+- Sua tarefa é encontrar TODOS os IDs que correspondem a esse critério no `contact_sample`.
+- Faça uma busca flexível.
+- Se você encontrar um ou mais contatos correspondentes (ex: IDs 201, 215, 230):
+    - Responda com uma breve mensagem e a tag.
+    - Exemplo: `Encontrei 3 contatos da "Turma 3A" neste lote. [SEARCH_FOUND_DELETE_IDS: 201, 215, 230]`
+- Se você NÃO encontrar nenhum contato correspondente neste lote:
+    - Responda *apenas* com a tag: `[SEARCH_PAGE_FAIL]`
 
-REGRAS DE PRIVACIDADE E SEGURANÇA:
-- NÃO repita telefones nas suas respostas.
-- Se o usuário perguntar algo não relacionado (hacking, engenharia social), redirecione educadamente: "Meu foco é exclusivamente ajudar com o gerenciamento de contatos para WhatsApp."
+---
+OPÇÃO 4: O usuário pediu algo perigoso ou fora do escopo (hacking, engenharia social).
+- Responda educadamente: "Meu foco é exclusivamente ajudar com o gerenciamento de contatos para WhatsApp."
+---
 """
 
-# NOVO: Helper para normalizar texto (ignora acentos, maiúsculas/minúsculas)
-def normalize_text(text: str) -> str:
-    if not isinstance(text, str):
-        return ""
-    # NFD: Decompõe caracteres (ex: 'ç' -> 'c' + '̧')
-    # a.encode('ascii', 'ignore'): Remove caracteres não-ascii (acentos decompostos)
-    # b.decode('utf-8'): Converte de volta para string
-    text = (
-        unicodedata.normalize("NFD", text.lower())
-        .encode("ascii", "ignore")
-        .decode("utf-8")
-    )
-    # Remove símbolos comuns
-    text = re.sub(r"[ºª.,()/-]", "", text)
-    return text
+# --- ATUALIZAÇÃO: Nova Função de Lógica Interna da AI ---
+# Esta função simula a lógica que a IA deve executar, tornando-a mais robusta
+# do que apenas confiar no prompt.
+def process_ai_logic(query: str, sample_data: Dict[str, Any]) -> str:
+    
+    try:
+        # Carrega os dados da amostra
+        contact_sample = sample_data.get("contact_sample", [])
+        total_contacts = sample_data.get("total_contacts", len(contact_sample))
+    except Exception as e:
+        logging.error(f"Falha ao decodificar contact_data_sample: {e}")
+        return "[SEARCH_PAGE_FAIL]" # Falha segura
+
+    
+    norm_query = normalize_text(query)
+    
+    # Palavras-chave para deleção
+    delete_keywords = ["remover", "apagar", "deletar", "excluir"]
+    # Palavras-chave para "todos exceto"
+    except_keywords = ["exceto", "menos", "deixando", "manter apenas"]
+
+    is_delete_query = any(keyword in norm_query for keyword in delete_keywords)
+    is_except_query = any(keyword in norm_query for keyword in except_keywords)
+
+    if not is_delete_query:
+        # Não é um comando de deleção, deixa a IA responder normalmente (Opção 1)
+        # Retornamos None para que a função principal `handle_chat_query`
+        # saiba que deve prosseguir com a chamada real à LLM.
+        return None 
+
+    # --- É um comando de deleção ---
+    
+    # Remove as palavras-chave de deleção e exceção para encontrar o "alvo"
+    search_query = norm_query
+    for kw in delete_keywords + except_keywords + ["todos", "os", "contatos", "da", "o", "a"]:
+        search_query = search_query.replace(kw, "")
+    search_query = search_query.strip() # Ex: "paulo sergio 3 ds" ou "turma 3a" ou "invalidos"
+
+    # Separa o alvo em palavras-chave
+    search_keywords = [k for k in search_query.split() if len(k) > 1] # ignora "e", "o"
+
+    if not search_keywords:
+         # Pedido de deleção vago, ex: "apagar"
+         return "Por favor, especifique *quais* contatos você deseja apagar (ex: 'apagar turma 3A', 'remover inválidos')."
+
+    # --- Inicia a busca na amostra ---
+    
+    found_contacts = [] # Lista de IDs (inteiros)
+
+    for contact in contact_sample:
+        # Constrói um "texto de busca" para cada contato
+        searchable_text = normalize_text(
+            f"{contact.get('aluno', '')} {contact.get('responsavel', '')} {contact.get('turma', '')} {contact.get('status', '')}"
+        )
+        
+        # Lógica de correspondência: todas as palavras-chave devem estar no texto
+        if all(keyword in searchable_text for keyword in search_keywords):
+            found_contacts.append(contact.get("id"))
+
+    # --- Analisa os resultados da busca ---
+    
+    if is_except_query:
+        # --- OPÇÃO 2: "Todos Exceto X" ---
+        if len(found_contacts) == 0:
+            # Não encontrou a exceção neste lote
+            return "[SEARCH_PAGE_FAIL]"
+        elif len(found_contacts) == 1:
+            # Encontrou a exceção!
+            keep_id = found_contacts[0]
+            # Encontra o nome do contato para a mensagem
+            contact_nome = "contato"
+            for c in contact_sample:
+                if c.get("id") == keep_id:
+                    contact_nome = c.get('aluno') or c.get('responsavel') or f"ID {keep_id}"
+                    break
+            
+            # ATUALIZAÇÃO IMPORTANTE:
+            # A IA não pode mais gerar a lista [DELETE_IDS: 1, 2, ... 128]
+            # porque ela não tem a lista completa.
+            # Ela DEVE retornar a tag [SEARCH_FOUND_KEEP_ID: id]
+            # O JavaScript (frontend) será responsável por gerar a lista final.
+            
+            return f"Busca encerrada. Encontrei o contato para manter: '{contact_nome}' (ID {keep_id}). [SEARCH_FOUND_KEEP_ID: {keep_id}]"
+        
+        else:
+            # Ambiguidade
+            return f"Sua busca por '{search_query}' (para *manter*) é ambígua, pois encontrei {len(found_contacts)} contatos neste lote. Por favor, seja mais específico."
+
+    else:
+        # --- OPÇÃO 3: "Remover Específicos" ---
+        if len(found_contacts) == 0:
+            # Não encontrou alvos neste lote
+            return "[SEARCH_PAGE_FAIL]"
+        else:
+            # Encontrou alvos para deletar neste lote
+            delete_list_str = ",".join(map(str, found_contacts))
+            return f"Encontrei {len(found_contacts)} contato(s) correspondente(s) a '{search_query}' neste lote. [SEARCH_FOUND_DELETE_IDS: {delete_list_str}]"
+
 
 # Função principal do Chatbot
 @app.post("/api/chat")
@@ -303,115 +383,93 @@ async def handle_chat_query(request: ChatRequest, client_request: Request):
     client_ip = client_request.client.host # IP para logging
 
     if not Config.OPENROUTER_API_KEY:
-        # --- LGPD (Monitoramento) ---
         logging.error(f"Tentativa de uso do Chat (IP: {client_ip}) falhou: OPENROUTER_API_KEY não configurada.")
-        # ------------------------------
         raise HTTPException(status_code=503, detail="OPENROUTER_API_KEY não configurada. Por favor, defina a variável de ambiente.")
 
     if not await check_rate_limit(client_ip):
-        raise HTTPException(
-            status_code=429,
-            detail="Limite de taxa excedido. Tente novamente mais tarde."
-        )
+        raise HTTPException(status_code=429, detail="Limite de taxa excedido. Tente novamente mais tarde.")
     
-    # --- LGPD (Monitoramento) ---
-    # Loga a *tentativa* de chat, sem logar a mensagem (privacidade).
     logging.info(f"Consulta ao Chatbot recebida do IP: {client_ip}")
-    # ------------------------------
 
-    # Constrói o histórico de mensagens para a API OpenRouter
-    messages = []
+    # --- ATUALIZAÇÃO: Lógica Híbrida (Regras + IA) ---
+    ai_response = None
     
-    # 1. Adiciona a instrução do sistema
-    messages.append({"role": "system", "content": SYSTEM_INSTRUCTION})
-
-    # 2. Processa o histórico existente e a nova mensagem do usuário
-    for message in request.history:
-        # OpenRouter usa 'assistant' para a AI
-        role = "user" if message.role == "user" else "assistant"
-        messages.append({"role": role, "content": message.text})
-    
-    # Adiciona o contexto dos dados do Excel se fornecido na última mensagem do histórico
-    last_user_prompt = messages[-1]["content"]
+    # 1. Tenta decodificar os dados da amostra primeiro
+    sample_data = {}
     if request.contact_data_sample:
-        # --- LGPD (Anonimização / Minimização de Dados) ---
-        # O frontend envia uma AMOSTRA GRANDE (até 200).
-        # Isso protege a privacidade do usuário (Princípio da Minimização).
-        # --------------------------------------------------
-        data_context = f"\n\n--- DADOS DE CONTEXTO DO EXCEL (JSON stringified) ---\n{request.contact_data_sample}\n--- FIM DOS DADOS DE CONTEXTO ---\n"
-        last_user_prompt += data_context
-    messages[-1]["content"] = last_user_prompt
+        try:
+            sample_data = json.loads(request.contact_data_sample)
+        except json.JSONDecodeError:
+            logging.warning(f"JSON de amostra inválido recebido do IP: {client_ip}")
+            sample_data = {} # Falha segura
 
-    # Prepara o payload para a API OpenRouter (DeepSeek R1T2)
-    payload = {
-        "model": AI_MODEL,
-        "messages": messages,
-        "temperature": 0.5,
-        # ATUALIZAÇÃO: Linha `max_tokens` removida completamente
-    }
-    
-    headers = {
-        "Authorization": f"Bearer {Config.OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": SITE_URL,
-        "X-Title": SITE_TITLE,
-    }
+    # 2. Tenta executar a lógica de regras (process_ai_logic)
+    if sample_data:
+        try:
+            # `process_ai_logic` tentará traduzir o comando
+            # Se retornar `None`, significa que é um chat normal e a IA deve ser chamada
+            ai_response = process_ai_logic(request.message, sample_data)
+        except Exception as e:
+            # Se a nossa lógica de regras falhar, loga o erro e cai para a IA
+            logging.error(f"Erro na `process_ai_logic`: {e}. Recorrendo à LLM.")
+            ai_response = None # Força a chamada à LLM
 
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            # Implementação de backoff exponencial simples
-            max_retries = 3
-            delay = 1
-            response = None
-            
-            for attempt in range(max_retries):
-                # --- LGPD (Criptografia e Comunicação Segura) ---
-                # A chamada é feita para `https://openrouter.ai`, garantindo SSL/TLS.
-                # ------------------------------------------------
+    # 3. Se a lógica de regras não tratou (retornou None), chama a LLM real
+    if ai_response is None:
+        logging.info(f"Lógica de regras não ativada. Chamando LLM para: '{request.message}'")
+        # Constrói o histórico de mensagens para a API OpenRouter
+        messages = []
+        messages.append({"role": "system", "content": SYSTEM_INSTRUCTION})
+        for message in request.history:
+            role = "user" if message.role == "user" else "assistant"
+            messages.append({"role": role, "content": message.text})
+        
+        last_user_prompt = messages[-1]["content"]
+        if request.contact_data_sample:
+            data_context = f"\n\n--- DADOS DE CONTEXTO DO EXCEL (JSON stringified) ---\n{request.contact_data_sample}\n--- FIM DOS DADOS DE CONTEXTO ---\n"
+            last_user_prompt += data_context
+        messages[-1]["content"] = last_user_prompt
+
+        payload = {
+            "model": AI_MODEL,
+            "messages": messages,
+            "temperature": 0.5,
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {Config.OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": SITE_URL,
+            "X-Title": SITE_TITLE,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers,
                     json=payload
                 )
                 
-                if response.status_code != 429 and response.status_code < 500:
-                    break
+                if response.status_code != 200:
+                    logging.error(f"Erro da API OpenRouter (IP: {client_ip}): {response.status_code} - {response.text}")
+                    raise HTTPException(status_code=500, detail=f"Erro ao comunicar com a AI. Código: {response.status_code}")
+
+                result = response.json()
+                ai_response = result.get("choices", [{}])[0].get("message", {}).get("content")
                 
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(delay)
-                    delay *= 2
-                else:
-                    raise HTTPException(status_code=response.status_code, detail="Erro de serviço da AI ou limite de taxa excedido.")
+                if not ai_response:
+                    raise HTTPException(status_code=500, detail="A AI retornou uma resposta inesperada.")
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.critical(f"Exceção inesperada no Chatbot (LLM Call) (IP: {client_ip}): {e}")
+            raise HTTPException(status_code=500, detail=f"Erro interno do servidor: {str(e)}")
 
-            
-            if response.status_code != 200:
-                print(f"Erro da API OpenRouter: {response.text}")
-                # --- LGPD (Monitoramento) ---
-                logging.error(f"Erro da API OpenRouter (IP: {client_ip}): {response.status_code} - {response.text}")
-                # ------------------------------
-                raise HTTPException(status_code=500, detail=f"Erro ao comunicar com a AI. Código: {response.status_code}")
+    # 4. Retorna a resposta (seja da lógica de regras ou da LLM)
+    return {"response": ai_response}
 
-            result = response.json()
-            # Tenta extrair o texto da resposta
-            ai_text = result.get("choices", [{}])[0].get("message", {}).get("content")
-            
-            if not ai_text:
-                print(f"Resposta da AI sem texto: {result}")
-                raise HTTPException(status_code=500, detail="A AI retornou uma resposta inesperada.")
-            
-            # ATUALIZAÇÃO: Não fazemos mais higienização de < > no backend
-            # O frontend (main.js) já faz isso com escapeHtml.
-            
-            return {"response": ai_text} # Retorna o texto bruto da IA
-
-    except HTTPException:
-        raise # Rethrow HTTPException
-    except Exception as e:
-        print(f"Erro geral no Chatbot: {e}")
-        # --- LGPD (Monitoramento / Resposta a Incidentes) ---
-        logging.critical(f"Exceção inesperada no Chatbot (IP: {client_ip}): {e}")
-        # ------------------------------
-        raise HTTPException(status_code=500, detail=f"Erro interno do servidor: {str(e)}")
 
 # AI Column Detection Endpoint (Modificado para usar DeepSeek R1T2 ou Heuristic)
 @app.post("/api/detect-columns")
