@@ -241,6 +241,8 @@ Você é o "Ajudante Geral a AI que pensa por você", um assistente de IA focado
 
 SUA TAREFA é analisar o pedido do usuário (query) e compará-lo com um LOTE de contatos (`contact_sample`). Você está em um loop de busca paginada.
 
+**REGRA DE BUSCA MAIS IMPORTANTE:** Ao procurar por um nome (ex: "Felipe Vinicius"), você DEVE procurar tanto no campo `aluno` quanto no campo `responsavel` automaticamente. Não presuma que o usuário quer dizer apenas 'aluno'.
+
 SUA RESPOSTA DEVE SER UMA DAS 4 OPÇÕES ABAIXO, E NADA MAIS:
 
 ---
@@ -262,9 +264,9 @@ OPÇÃO 2: O usuário pediu para "remover todos exceto X" (ex: "apagar todos men
     - Responda *apenas* com a tag: `[SEARCH_PAGE_FAIL]`
 
 ---
-OPÇÃO 3: O usuário pediu para "remover contatos específicos" (ex: "remover turma 3A", "apagar inválidos", "deletar João Silva").
+OPÇÃO 3: O usuário pediu para "remover contatos específicos" (ex: "remover turma 3A", "apagar inválidos", "deletar Felipe Vinicius").
 - Sua tarefa é encontrar TODOS os IDs que correspondem a esse critério no `contact_sample`.
-- Faça uma busca flexível.
+- Faça uma busca flexível (procure "Felipe Vinicius" em `aluno` e `responsavel`).
 - Se você encontrar um ou mais contatos correspondentes (ex: IDs 201, 215, 230):
     - Responda com uma breve mensagem e a tag.
     - Exemplo: `Encontrei 3 contatos da "Turma 3A" neste lote. [SEARCH_FOUND_DELETE_IDS: 201, 215, 230]`
@@ -309,11 +311,18 @@ def process_ai_logic(query: str, sample_data: Dict[str, Any]) -> str:
 
     # --- É um comando de deleção ---
     
+    # ATUALIZAÇÃO: Adiciona "aluno" e "responsavel" à lista de remoção
+    # para que "aluno felipe" seja tratado como "felipe"
+    context_keywords = ["aluno", "aluna", "responsavel", "do", "da", "o", "a"]
+    
     # Remove as palavras-chave de deleção e exceção para encontrar o "alvo"
     search_query = norm_query
-    for kw in delete_keywords + except_keywords + ["todos", "os", "contatos", "da", "o", "a"]:
-        search_query = search_query.replace(kw, "")
-    search_query = search_query.strip() # Ex: "paulo sergio 3 ds" ou "turma 3a" ou "invalidos"
+    for kw in delete_keywords + except_keywords + context_keywords + ["todos", "os", "contatos"]:
+        search_query = search_query.replace(f" {kw} ", " ") # Remove com espaços
+        search_query = search_query.replace(f"{kw} ", "") # Remove no início
+        search_query = search_query.replace(f" {kw}", "") # Remove no fim
+    
+    search_query = search_query.strip() # Ex: "paulo sergio 3 ds" ou "turma 3a" ou "invalidos" ou "felipe vinicius"
 
     # Separa o alvo em palavras-chave
     search_keywords = [k for k in search_query.split() if len(k) > 1] # ignora "e", "o"
@@ -328,6 +337,7 @@ def process_ai_logic(query: str, sample_data: Dict[str, Any]) -> str:
 
     for contact in contact_sample:
         # Constrói um "texto de busca" para cada contato
+        # ATENÇÃO: É aqui que a busca é feita em todos os campos.
         searchable_text = normalize_text(
             f"{contact.get('aluno', '')} {contact.get('responsavel', '')} {contact.get('turma', '')} {contact.get('status', '')}"
         )
@@ -352,12 +362,6 @@ def process_ai_logic(query: str, sample_data: Dict[str, Any]) -> str:
                 if c.get("id") == keep_id:
                     contact_nome = c.get('aluno') or c.get('responsavel') or f"ID {keep_id}"
                     break
-            
-            # ATUALIZAÇÃO IMPORTANTE:
-            # A IA não pode mais gerar a lista [DELETE_IDS: 1, 2, ... 128]
-            # porque ela não tem a lista completa.
-            # Ela DEVE retornar a tag [SEARCH_FOUND_KEEP_ID: id]
-            # O JavaScript (frontend) será responsável por gerar a lista final.
             
             return f"Busca encerrada. Encontrei o contato para manter: '{contact_nome}' (ID {keep_id}). [SEARCH_FOUND_KEEP_ID: {keep_id}]"
         
