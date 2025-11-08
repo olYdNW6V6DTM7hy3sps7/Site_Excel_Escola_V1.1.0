@@ -196,13 +196,52 @@ class WhatsAppBulkManager {
     }
     
     getContactDataSample() {
-        if (this.contacts.length === 0) return null;
+        // Se os contatos ainda não foram processados, envie uma amostra dos dados brutos
+        if (this.processedContacts.length === 0) {
+            if (this.contacts.length === 0) return null;
+            // Envia apenas as 5 primeiras linhas de dados brutos
+            const sample = this.contacts.slice(0, 5);
+            // Retorna como JSON stringificado para o backend
+            return JSON.stringify({
+                status: "processing_not_started",
+                sample_data: sample,
+                total_contacts: this.contacts.length
+            }, null, 2);
+        }
         
-        // Envia apenas as 5 primeiras linhas de dados completos
-        const sample = this.contacts.slice(0, 5);
+        // Se os contatos foram processados, envie um resumo inteligente
+        const validContacts = this.processedContacts.filter(c => c.status !== 'invalid');
+        const invalidContacts = this.processedContacts.filter(c => c.status === 'invalid');
+
+        // Pega amostras de ambos
+        const validSample = validContacts.slice(0, 5);
+        const invalidSample = invalidContacts.slice(0, 10); // Envia mais inválidos, pois são mais prováveis de serem perguntados
+
+        const summary = {
+            status: "processing_complete",
+            total_contacts: this.processedContacts.length,
+            total_valid: validContacts.length,
+            total_invalid: invalidContacts.length,
+            // Envia os 10 primeiros contatos inválidos
+            invalid_contacts_sample: invalidSample.map(c => ({
+                id: c.id,
+                aluno: c.aluno,
+                responsavel: c.responsavel,
+                turma: c.turma,
+                telefone_original: c.originalPhone,
+                status: c.status
+            })),
+            // Envia os 5 primeiros contatos válidos
+            valid_contacts_sample: validSample.map(c => ({
+                id: c.id,
+                aluno: c.aluno,
+                telefone_formatado: c.cleanedPhone,
+                status: c.status
+            }))
+        };
         
         // Retorna como JSON stringificado para o backend
-        return JSON.stringify(sample, null, 2);
+        return JSON.stringify(summary, null, 2);
     }
     
     async callChatAPI(userMessage, isInitial = false) {
@@ -304,7 +343,7 @@ class WhatsAppBulkManager {
             this.contacts = contacts;
             this.hideProgress();
             
-            // *** CORREÇÃO APLICADA AQUI ***
+            // *** CORREÇÃO APLICADA AQUI (da 1ª conversa) ***
             // Garante que o mapeamento apareça IMEDIATAMENTE após o parse,
             // antes mesmo da tentativa de AI.
             this.showMappingSection();
@@ -416,12 +455,8 @@ class WhatsAppBulkManager {
             console.error('AI detection failed:', error);
             this.showError('A detecção por AI falhou. Mapeie as colunas manualmente.');
             if (autoMode) {
-                 this.aiStatus.querySelector('span').textContent = 'Falha na detecção AI. Por favor, mapeie manualmente.';
+                 this.aiStatus.querySelector('span').textContent = 'Falha na detecção AI. Por favor, mapeie manually.';
             }
-            // *** CORREÇÃO ***
-            // Não chamamos updatePreview() aqui, pois o usuário
-            // precisará selecionar manualmente as colunas, o que
-            // irá disparar o updatePreview() através do evento 'change'.
         }
     }
     
