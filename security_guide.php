@@ -90,7 +90,7 @@ function get_user_data(PDO $pdo, $user_id) {
 // 1. Inicie sessões com configurações seguras
 ini_set('session.cookie_httponly', 1); // Impede JS de ler o cookie
 ini_set('session.cookie_secure', 1);   // Só envia cookie por HTTPS
-session_start();
+// session_start(); // Descomente para usar
 
 // 2. Armazene senhas com hash (NUNCA texto puro)
 // $senha_do_usuario = "123456";
@@ -129,10 +129,12 @@ function require_login() {
  */
 function force_https() {
     if (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off') {
-        $location = 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
-        header('HTTP/1.1 301 Moved Permanently');
-        header('Location: ' . $location);
-        exit;
+        if (!headers_sent()) {
+            $location = 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+            header('HTTP/1.1 301 Moved Permanently');
+            header('Location: ' . $location);
+            exit;
+        }
     }
 }
 // Ex: force_https(); no topo do seu `index.php`
@@ -212,10 +214,12 @@ function log_security_event($message, $level = 'WARNING') {
 }
 
 // Exemplo:
-// $user_id = validate_input($_POST['user_id'], 'id');
-// if ($user_id === false) {
-//     log_security_event("Tentativa de acesso com ID inválido: " . $_POST['user_id'], 'CRITICAL');
-//     die("Acesso negado.");
+// if (isset($_POST['user_id'])) {
+//     $user_id = validate_input($_POST['user_id'], 'id');
+//     if ($user_id === false) {
+//         log_security_event("Tentativa de acesso com ID inválido: " . $_POST['user_id'], 'CRITICAL');
+//         die("Acesso negado.");
+//     }
 // }
 
 ?>
