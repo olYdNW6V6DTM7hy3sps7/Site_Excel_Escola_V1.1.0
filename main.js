@@ -137,7 +137,7 @@ class WhatsAppBulkManager {
     // NOVO: Lógica do Chatbot
     initializeChat() {
         // Inicializa o histórico do chat com a saudação da AI
-        this.addMessage("Olá! Sou o **Ajudante General a AI que pensa por você**. Estou aqui para te ajudar a entender a estrutura do seu arquivo de contatos e como usar todas as funcionalidades do site para envio em massa. O que você gostaria de saber sobre o seu arquivo ou sobre o site?", 'ai', true);
+        this.addMessage("Olá! Sou o Ajudante Geral a AI que pensa por você. Estou aqui para te ajudar a entender a estrutura do seu arquivo de contatos e como usar todas as funcionalidades do site para envio em massa. O que você gostaria de saber sobre o seu arquivo ou sobre o site?", 'ai', true);
     }
     
     toggleChat() {
@@ -161,12 +161,18 @@ class WhatsAppBulkManager {
     }
 
     addMessage(text, role, isSilent = false) {
+        // NOVO: Limpa os caracteres "*" e "#" das respostas da AI
+        let cleanedText = text;
+        if (role === 'ai') {
+            cleanedText = text.replace(/[*#]/g, ''); // Remove todos os * e #
+        }
+
         // Limita o histórico a 20 mensagens (10 pares) para evitar sobrecarga no payload
         if (!isSilent && this.chatHistory.length >= 20) {
             this.chatHistory.shift(); // Remove o mais antigo
         }
         
-        const messageObject = { role: role, text: text };
+        const messageObject = { role: role, text: cleanedText }; // Usa o cleanedText
         if (!isSilent) {
             this.chatHistory.push(messageObject);
         }
@@ -177,13 +183,10 @@ class WhatsAppBulkManager {
         const bubble = document.createElement('div');
         bubble.className = `message-bubble ${role === 'user' ? 'user-message' : 'ai-message'}`;
 
-        // Usa Markdown para formatar a saída da AI. Adiciona HTML de forma segura.
-        // bubble.innerHTML = new DOMParser().parseFromString(marked.parse(text), 'text/html').body.innerHTML;
-        
         // CORREÇÃO: Remove a dependência do 'marked.js' (que causava o erro)
         // e usa textContent (via escapeHtml) para segurança.
         // Substitui quebras de linha por <br> para formatação básica.
-        const formattedText = this.escapeHtml(text).replace(/\n/g, '<br>');
+        const formattedText = this.escapeHtml(cleanedText).replace(/\n/g, '<br>'); // Usa o cleanedText
         bubble.innerHTML = formattedText;
 
         messageDiv.appendChild(bubble);
@@ -455,7 +458,7 @@ class WhatsAppBulkManager {
             console.error('AI detection failed:', error);
             this.showError('A detecção por AI falhou. Mapeie as colunas manualmente.');
             if (autoMode) {
-                 this.aiStatus.querySelector('span').textContent = 'Falha na detecção AI. Por favor, mapeie manually.';
+                 this.aiStatus.querySelector('span').textContent = 'Falha na detecção AI. Por favor, mapeie manualmente.';
             }
         }
     }
