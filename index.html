@@ -13,7 +13,6 @@
             background-color: #eff6ff !important;
         }
         .status-valid { color: #10b981; }
-        .status-warning { color: #f59e0b; }
         .status-invalid { color: #ef4444; }
         .placeholder-highlight {
             background: linear-gradient(120deg, #3b82f6 0%, #8b5cf6 100%);
@@ -98,7 +97,6 @@
         }
         /* Corrigindo a cor de status para ícones */
         .status-invalid i { color: #ef4444; }
-        .status-corrected i { color: #f59e0b; }
         .status-valid i { color: #10b981; }
     </style>
 </head>
@@ -165,15 +163,14 @@
         <div id="mappingSection" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 hidden">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-lg font-semibold text-gray-900">Mapeamento de Colunas</h2>
-                <button id="detectColumnsBtn" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-                    <i class="fas fa-magic mr-2"></i>Detecção de Colunas com AI
-                </button>
+                <!-- O botão foi removido e a detecção é automática no main.js -->
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Coluna do Nome foi substituída pela Coluna do Aluno para o "name" do template -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Coluna do Nome</label>
-                    <select id="nameColumn" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Coluna do Aluno (Nome Principal)</label>
+                    <select id="alunoColumn" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                         <option value="">Selecione a coluna...</option>
                     </select>
                 </div>
@@ -194,12 +191,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Coluna do Aluno</label>
-                    <select id="alunoColumn" class="w-full border border-gray-300 rounded-lg px-3 py-2">
-                        <option value="">Selecione a coluna...</option>
-                    </select>
-                </div>
-                <div>
+                    <!-- Coluna do Aluno original foi movida para o topo para ser o "nameColumn" -->
                     <label class="block text-sm font-medium text-gray-700 mb-2">Coluna da Turma</label>
                     <select id="turmaColumn" class="w-full border border-gray-300 rounded-lg px-3 py-2">
                         <option value="">Selecione a coluna...</option>
@@ -212,7 +204,7 @@
             <div id="aiStatus" class="mt-4 hidden">
                 <div class="flex items-center p-3 bg-blue-50 rounded-lg">
                     <i class="fas fa-robot text-blue-600 mr-2"></i>
-                    <span class="text-sm text-blue-800">AI detectou colunas com 95% de confiança</span>
+                    <span class="text-sm text-blue-800">AI detectou e mapeou colunas automaticamente.</span>
                 </div>
             </div>
         </div>
@@ -223,7 +215,6 @@
                 <h2 class="text-lg font-semibold text-gray-900">Prévia dos Contatos</h2>
                 <div class="flex items-center space-x-4 text-sm">
                     <span class="status-valid">🟢 Válido</span>
-                    <span class="status-warning">🟡 Corrigido</span>
                     <span class="status-invalid">🔴 Inválido</span>
                 </div>
             </div>
@@ -238,7 +229,9 @@
                     <thead class="bg-gray-50 sticky top-0">
                         <tr>
                             <th class="px-4 py-2 text-left font-medium text-gray-700">#</th>
-                            <th class="px-4 py-2 text-left font-medium text-gray-700">Nome (Mapeado)</th>
+                            <th class="px-4 py-2 text-left font-medium text-gray-700">Aluno (Nome)</th>
+                            <th class="px-4 py-2 text-left font-medium text-gray-700">Responsável</th>
+                            <th class="px-4 py-2 text-left font-medium text-gray-700">Turma</th>
                             <th class="px-4 py-2 text-left font-medium text-gray-700">Telefone (Formatado)</th>
                             <th class="px-4 py-2 text-left font-medium text-gray-700">DDD</th>
                             <th class="px-4 py-2 text-left font-medium text-gray-700">Status</th>
@@ -355,7 +348,7 @@
                 </div>
                 <form id="chatForm" class="flex">
                     <input type="text" id="chatInput" class="flex-grow border border-gray-300 rounded-l-lg p-2 text-sm focus:outline-none focus:border-purple-500" placeholder="Pergunte sobre seus contatos ou sobre o site...">
-                    <button type="submit" id="chatSendBtn" class="bg-purple-600 text-white p-2 rounded-r-lg hover:bg-purple-700 transition-colors disabled:opacity-50" disabled>
+                    <button type="submit" id="chatSendBtn" class="bg-purple-600 text-white p-2 rounded-r-lg hover:bg-purple-700 transition-colors disabled:opacity-50">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </form>
@@ -405,7 +398,7 @@
                     <h4 class="font-medium text-gray-900 mb-2">Como Usar</h4>
                     <ol class="list-decimal list-inside space-y-2 text-sm text-gray-600">
                         <li>Carregue um arquivo Excel (.xlsx, .xls) ou CSV contendo seus contatos</li>
-                        <li>Mapeie as colunas de nome e telefone (ou use a detecção por AI)</li>
+                        <li>O mapeamento das colunas é automático via AI após o upload.</li>
                         <li>Pré-visualize seus contatos e verifique a formatação do número de telefone</li>
                         <li>Use o Chatbot de AI (<i class="fas fa-robot"></i> no canto inferior direito) para tirar dúvidas sobre seus dados ou o site.</li>
                         <li>Escolha seu método preferido:</li>
@@ -420,18 +413,19 @@
                     <h4 class="font-medium text-gray-900 mb-2">Formato do Arquivo</h4>
                     <p class="text-sm text-gray-600 mb-2">Seu arquivo Excel/CSV deve conter pelo menos estas colunas:</p>
                     <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
-                        <li>Nome (nome completo do contato)</li>
-                        <li>Telefone (número de telefone em qualquer formato)</li>
+                        <li>Nome do Aluno (usado como nome principal)</li>
+                        <li>Nome do Responsável</li>
+                        <li>Turma</li>
+                        <li>Telefone</li>
                         <li>Opcional: Campos personalizados adicionais</li>
                     </ul>
                 </div>
 
                 <div>
                     <h4 class="font-medium text-gray-900 mb-2">Formato do Número de Telefone</h4>
-                    <p class="text-sm text-gray-600">O sistema formata automaticamente os números de telefone para o padrão E.164:</p>
+                    <p class="text-sm text-gray-600">O sistema formata automaticamente os números de telefone para o padrão E.164: +55 + DDD + 9 + 8 dígitos.</p>
                     <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
-                        <li>Números brasileiros: +55 + DDD + número</li>
-                        <li>Outros formatos são detectados e corrigidos automaticamente</li>
+                        <li>Números que resultarem em **menos de 8 dígitos** após a limpeza são marcados como **Inválidos**.</li>
                     </ul>
                 </div>
 
