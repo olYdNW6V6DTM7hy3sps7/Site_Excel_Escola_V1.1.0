@@ -5,6 +5,7 @@
 // - A IA agora recebe lotes de 200 contatos, um de cada vez.
 // - O JS gerencia o estado da busca (aiSearchState) e o loop de páginas.
 // - A IA atua como "tradutora" de comandos complexos para tags de busca.
+// - NOVO: (HOJE) Detecção Inteligente de Arquivos (PDF, Excel, CSV) e Conversão de PDF
 
 // ** VARIÁVEL DE AMBIENTE DA API **
 const API_BASE_URL = 'https://site-excel-escola-v1-1-0.onrender.com';
@@ -49,6 +50,8 @@ class WhatsAppBulkManager {
         this.fileSize = document.getElementById('fileSize');
         this.removeFile = document.getElementById('removeFile');
         this.browseBtn = document.getElementById('browseBtn');
+        // NOVO: Ícone do arquivo
+        this.fileIcon = document.getElementById('fileIcon');
 
         // Column mapping elements
         this.mappingSection = document.getElementById('mappingSection');
@@ -621,7 +624,7 @@ class WhatsAppBulkManager {
     // --- Fim da Lógica do Chatbot ---
 
 
-    // --- Lógica de Upload e Processamento ---
+    // --- Lógica de Upload e Processamento (ATUALIZADA) ---
     
     handleDragOver(e) { e.preventDefault(); this.dropZone.classList.add('drag-over'); }
     handleDragLeave(e) { e.preventDefault(); this.dropZone.classList.remove('drag-over'); }
@@ -636,22 +639,113 @@ class WhatsAppBulkManager {
         if (file) { this.processFile(file); }
     }
 
+    // NOVO: Roteador de Arquivos
     async processFile(file) {
-        if (!file.name.match(/\.(xlsx|xls|csv)$/i)) {
-            this.showError('Por favor, carregue um arquivo Excel ou CSV válido');
-            return;
-        }
+        // 1. Limpa o estado da UI, exceto o arquivo
+        this.contacts = [];
+        this.processedContacts = [];
+        this.mappingSection.classList.add('hidden');
+        this.previewSection.classList.add('hidden');
+        this.messageSection.classList.add('hidden');
+        this.actionSection.classList.add('hidden');
 
-        if (file.size > 10 * 1024 * 1024) {
-            this.showError('O tamanho do arquivo deve ser inferior a 10MB');
-            return;
-        }
-
+        // 2. Define o arquivo atual e mostra informações
         this.currentFile = file;
         this.showFileInfo(file);
         
+        // 3. Validação de tipo de arquivo
+        const fileName = file.name.toLowerCase();
+        const PDF_TO_EXCEL_API_URL = 'https://converter-pdf-para-excel.onrender.com/api/v1/convert/pdf-to-excel';
+
+        if (file.size > 10 * 1024 * 1024) {
+            this.showError('O tamanho do arquivo deve ser inferior a 10MB');
+            this.clearFile(); // Limpa tudo
+            return;
+        }
+
+        if (fileName.endsWith('.pdf')) {
+            // --- Rota PDF ---
+            await this.handlePdfUpload(file, PDF_TO_EXCEL_API_URL);
+        } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
+            // --- Rota Excel/CSV ---
+            await this.handleExcelUpload(file);
+        } else {
+            // --- Rota Inválida ---
+            this.showError('Arquivo não compatível. Por favor, use PDF, Excel (.xlsx, .xls) ou CSV.');
+            this.clearFile(); // Limpa tudo
+        }
+    }
+
+    // NOVO: Processador de PDF
+    async handlePdfUpload(file, apiUrl) {
+        // Esta função assume que `this.currentFile` e `showFileInfo`
+        // já foram chamados por `processFile`.
+
+        this.showProgress('Convertendo PDF', 'Enviando seu PDF para o servidor de conversão...');
+        
+        const formData = new FormData();
+        formData.append('pdf_file', file);
+
         try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                // Trata erros da API
+                let errorMsg = 'Erro de Conversão: Falha inesperada no servidor.';
+                if (response.status === 400) {
+                    errorMsg = 'Erro de Conversão: O arquivo enviado não parece ser um PDF válido.';
+                } else if (response.status === 422) {
+                    errorMsg = 'Erro de Conversão: O PDF é válido, mas nenhuma tabela foi encontrada.';
+                } else if (response.status === 500) {
+                    errorMsg = 'Erro de Conversão: Falha interna no servidor de PDF.';
+                }
+                
+                this.hideProgress();
+                this.showError(errorMsg);
+                this.clearFile(); // Limpa o arquivo com falha
+                return;
+            }
+
+            // Sucesso na conversão
+            // Atualiza a mensagem de progresso
+            document.getElementById('progressTitle').textContent = 'Processando Excel';
+            document.getElementById('progressText').textContent = 'PDF convertido! Lendo dados do Excel resultante...';
+            
+            const excelBlob = await response.blob();
+            
+            // Cria um novo objeto File a partir do Blob
+            const excelFile = new File([excelBlob], `${file.name.replace(/\.pdf$/i, '')}_converted.xlsx`, { 
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
+            });
+            
+            // Atualiza a UI para mostrar o *novo* nome do arquivo
+            this.currentFile = excelFile;
+            this.showFileInfo(excelFile);
+
+            // Entrega o novo arquivo Excel para a função de processamento
+            // O `handleExcelUpload` cuidará de `hideProgress`
+            await this.handleExcelUpload(excelFile);
+
+        } catch (error) {
+            console.error('Erro de Rede na Conversão PDF:', error);
+            this.hideProgress();
+            this.showError('Erro de Rede: Não foi possível conectar ao serviço de conversão de PDF.');
+            this.clearFile();
+        }
+    }
+
+    // NOVO: Processador de Excel/CSV (Refatorado do `processFile` original)
+    async handleExcelUpload(file) {
+        // Esta função assume que `this.currentFile` e `showFileInfo`
+        // já foram chamados por `processFile`.
+        
+        try {
+            // Mostra o progresso
             this.showProgress('Processando Arquivo', 'Lendo dados da planilha. Por favor, aguarde...');
+            
             const contacts = await ExcelParser.parse(file);
             this.contacts = contacts; // Define a fonte da verdade
             this.hideProgress();
@@ -662,11 +756,32 @@ class WhatsAppBulkManager {
 
         } catch (error) {
             this.hideProgress();
-            this.showError('Erro ao analisar o arquivo: ' + error.message);
+            this.showError('Erro ao analisar o arquivo Excel/CSV: ' + error.message);
+            // Se o parse falhar, limpamos para evitar estado inconsistente
+            this.clearFile(); 
         }
     }
 
+    // NOVO: Helper para ícone do arquivo
+    getFileIconClass(fileName) {
+        const lowerName = (fileName || '').toLowerCase();
+        if (lowerName.endsWith('.pdf')) {
+            return 'fa-file-pdf text-red-600';
+        }
+        if (lowerName.endsWith('.csv')) {
+            return 'fa-file-csv text-gray-700';
+        }
+        if (lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')) {
+            return 'fa-file-excel text-green-600';
+        }
+        return 'fa-file-lines text-gray-600'; // Padrão
+    }
+
     showFileInfo(file) {
+        // NOVO: Atualiza o ícone dinamicamente
+        const iconClasses = this.getFileIconClass(file.name);
+        this.fileIcon.className = `fas ${iconClasses} text-2xl mr-4`;
+
         this.fileName.textContent = file.name;
         this.fileSize.textContent = this.formatFileSize(file.size);
         this.fileInfo.classList.remove('hidden');
@@ -683,6 +798,9 @@ class WhatsAppBulkManager {
         this.apiConfigSection.classList.add('hidden');
         this.actionSection.classList.add('hidden');
         this.fileInput.value = '';
+        
+        // NOVO: Reseta o ícone
+        this.fileIcon.className = 'fas fa-file-lines text-gray-600 text-2xl mr-4';
     }
 
     formatFileSize(bytes) {
@@ -1239,7 +1357,7 @@ class WhatsAppBulkManager {
         document.getElementById('progressTitle').textContent = title;
         document.getElementById('progressText').textContent = message;
         // Usa `processedContacts` para a contagem total
-        const total = this.processedContacts.filter(c => c.status !== 'invalid').length;
+        const total = this.processedContacts.filter(c => c.status !== 'invalid').length || (this.contacts || []).length || 0;
         document.getElementById('progressCount').textContent = `0/${total}`;
         document.getElementById('progressBar').style.width = `0%`;
         this.showModal('progressModal');
