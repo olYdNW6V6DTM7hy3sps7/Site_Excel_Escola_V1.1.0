@@ -54,11 +54,13 @@
                 <!-- Passo 1 -->
                 <div class="step-card">
                     <div class="step-icon primary">
-                        <i class="fas fa-file-excel"></i>
+                        <!-- Ícone atualizado -->
+                        <i class="fas fa-file-arrow-up"></i>
                     </div>
                     <div class="step-text">
                         <h3>Passo 1: Envie</h3>
-                        <p>Envie sua planilha Excel ou CSV com os contatos.</p>
+                        <!-- Texto atualizado -->
+                        <p>Envie sua planilha (Excel, CSV) ou um PDF com tabelas.</p>
                     </div>
                 </div>
 
@@ -112,23 +114,26 @@
 
         <!-- Upload Section -->
         <div class="content-card">
-            <h2 class="card-title">Passo 1: Envie sua Planilha</h2>
+            <h2 class="card-title">Passo 1: Envie seu Arquivo</h2>
             
+            <!-- ATUALIZAÇÃO: Zona de Upload com novos textos e ícone -->
             <div id="dropZone">
-                <i class="fas fa-cloud-upload-alt"></i>
-                <p class="text-lg font-medium text-gray-700 mb-2">Arraste seu arquivo Excel ou CSV aqui</p>
+                <i class="fas fa-file-arrow-up"></i>
+                <p class="text-lg font-medium text-gray-700 mb-2">Arraste seu arquivo (PDF, Excel, CSV) aqui</p>
                 <p class="text-sm text-gray-500 mb-4">ou clique para procurar no computador</p>
                 <button id="browseBtn" class="btn btn-primary">
                     <i class="fas fa-folder-open mr-2"></i>Escolher Arquivo
                 </button>
-                <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden">
+                <!-- ATUALIZAÇÃO: Aceita .pdf -->
+                <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.pdf" class="hidden">
             </div>
 
             <!-- File Info -->
             <div id="fileInfo" class="mt-4 hidden">
                 <div class="flex items-center justify-between bg-gray-50 rounded-lg p-4 border border-gray-200">
                     <div class="flex items-center">
-                        <i class="fas fa-file-excel text-green-600 text-2xl mr-4"></i>
+                        <!-- ATUALIZAÇÃO: Ícone genérico que será alterado pelo JS -->
+                        <i id="fileIcon" class="fas fa-file-lines text-gray-600 text-2xl mr-4"></i>
                         <div>
                             <p id="fileName" class="font-medium text-gray-900"></p>
                             <p id="fileSize" class="text-sm text-gray-500"></p>
@@ -517,8 +522,10 @@
                 <!-- Seção de Instruções -->
                 <div>
                     <h4 class="font-medium text-gray-900 mb-2">Como Usar (O Básico)</h4>
+                    <!-- ATUALIZAÇÃO: Instruções incluem PDF -->
                     <ol class="list-decimal list-inside space-y-2 text-sm text-gray-600">
-                        <li><strong>Passo 1:</strong> Carregue um arquivo Excel (.xlsx, .xls) ou CSV.</li>
+                        <li><strong>Passo 1:</strong> Carregue um arquivo Excel (.xlsx, .xls), CSV ou PDF (que contenha tabelas).</li>
+                        <li><strong>(Se PDF):</strong> Aguarde a conversão automática para Excel.</li>
                         <li><strong>Passo 2:</strong> O site tentará adivinhar as colunas. Confira se "Nome do Aluno" e "Telefone" estão corretos.</li>
                         <li><strong>Ajuda da IA:</strong> A qualquer momento, clique no <strong>robô roxo</strong> para tirar dúvidas sobre seus dados ou sobre o site.</li>
                         <li><strong>Remover Contato:</strong> Você pode clicar no ícone de lixeira (<i class="fas fa-trash-alt"></i>) na tabela para remover um contato, ou pedir à IA (ex: "Remover contato João da Silva", "Remover todos os inválidos").</li>
@@ -545,7 +552,7 @@
                             <i class="fas fa-shield-alt text-green-600 w-5 text-center mr-3 mt-1"></i>
                             <div>
                                 <strong class="text-gray-800">Criptografia e Comunicação Segura (SSL/TLS)</strong>
-                                <p class="text-gray-600">Toda a comunicação entre seu navegador e nosso servidor (para o Ajudante AI e API do WhatsApp) é 100% criptografada usando HTTPS (o "cadeado" no seu navegador), garantindo a confidencialidade dos dados em trânsito.</p>
+                                <p class="text-gray-600">Toda a comunicação entre seu navegador e nosso servidor (para o Ajudante AI, API do WhatsApp e Conversão de PDF) é 100% criptografada usando HTTPS (o "cadeado" no seu navegador).</p>
                             </div>
                         </div>
                         
@@ -554,7 +561,7 @@
                             <i class="fas fa-eye-slash text-gray-600 w-5 text-center mr-3 mt-1"></i>
                             <div>
                                 <strong class="text-gray-800">Privacidade Total, Anonimização e Pseudonimização</strong>
-                                <p class="text-gray-600">Seus contatos <strong>NUNCA</strong> saem do seu computador (Modo 1) ou são armazenados em nosso servidor (Modo 2). No Modo 2, os dados são repassados diretamente à API do WhatsApp e descartados. Para a IA, enviamos apenas uma *amostra* dos dados (Minimização de Dados), e pedimos sua permissão antes de fazê-lo.</p>
+                                <p class="text-gray-600">Seus contatos <strong>NUNCA</strong> saem do seu computador (Modo 1) ou são armazenados em nosso servidor (Modo 2). No Modo 2, os dados são repassados diretamente à API do WhatsApp e descartados. Para a IA e para a conversão de PDF, os dados são usados apenas para a operação e descartados imediatamente após, sem armazenamento.</p>
                             </div>
                         </div>
 
