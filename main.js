@@ -5,7 +5,7 @@
 // - A IA agora recebe lotes de 200 contatos, um de cada vez.
 // - O JS gerencia o estado da busca (aiSearchState) e o loop de páginas.
 // - A IA atua como "tradutora" de comandos complexos para tags de busca.
-// - ATUALIZAÇÃO (HOJE): API de Conversão de PDF atualizada para PixelPath v2.0
+// - ATUALIZAÇÃO (HOJE): Adicionado download do Excel convertido.
 
 // ** VARIÁVEL DE AMBIENTE DA API **
 const API_BASE_URL = 'https://site-excel-escola-v1-1-0.onrender.com';
@@ -15,6 +15,7 @@ class WhatsAppBulkManager {
         this.contacts = []; // A fonte da verdade (dados brutos)
         this.processedContacts = []; // Dados limpos e validados (para exibição)
         this.currentFile = null;
+        this.convertedExcelBlob = null; // NOVO: Armazena o blob do Excel
         this.columns = [];
         this.mode = 'vcf';
         this.chatHistory = []; 
@@ -50,8 +51,9 @@ class WhatsAppBulkManager {
         this.fileSize = document.getElementById('fileSize');
         this.removeFile = document.getElementById('removeFile');
         this.browseBtn = document.getElementById('browseBtn');
-        // NOVO: Ícone do arquivo
         this.fileIcon = document.getElementById('fileIcon');
+        // NOVO: Botão de download do Excel
+        this.downloadConvertedExcelBtn = document.getElementById('downloadConvertedExcelBtn');
 
         // Column mapping elements
         this.mappingSection = document.getElementById('mappingSection');
@@ -132,6 +134,8 @@ class WhatsAppBulkManager {
         this.dropZone.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
         this.removeFile.addEventListener('click', this.clearFile.bind(this));
+        // NOVO: Evento de clique do botão de download
+        this.downloadConvertedExcelBtn.addEventListener('click', this.downloadConvertedExcel.bind(this));
 
         // Column mapping events
         this.alunoColumn.addEventListener('change', this.updatePreview.bind(this));
@@ -648,6 +652,8 @@ class WhatsAppBulkManager {
         this.previewSection.classList.add('hidden');
         this.messageSection.classList.add('hidden');
         this.actionSection.classList.add('hidden');
+        // NOVO: Esconde o botão de download ao processar novo arquivo
+        this.downloadConvertedExcelBtn.classList.add('hidden');
 
         // 2. Define o arquivo atual e mostra informações
         this.currentFile = file;
@@ -655,11 +661,7 @@ class WhatsAppBulkManager {
         
         // 3. Validação de tipo de arquivo
         const fileName = file.name.toLowerCase();
-
-        // *** MODIFICAÇÃO (INÍCIO): API de Conversão de PDF Atualizada ***
-        // A nova URL da API v2.0 (PixelPath) com o formato de saída XLSX.
         const PDF_TO_EXCEL_API_URL = 'https://converter-pdf-para-excel-v2-0.onrender.com/extract?output_format=xlsx';
-        // *** MODIFICAÇÃO (FIM) ***
 
         if (file.size > 10 * 1024 * 1024) {
             this.showError('O tamanho do arquivo deve ser inferior a 10MB');
@@ -688,11 +690,7 @@ class WhatsAppBulkManager {
         this.showProgress('Convertendo PDF', 'Enviando seu PDF para o servidor de conversão...');
         
         const formData = new FormData();
-        
-        // *** MODIFICAÇÃO (INÍCIO): Nome do Campo da API Atualizado ***
-        // A API antiga usava 'pdf_file', a nova (PixelPath) usa 'file'.
-        formData.append('file', file);
-        // *** MODIFICAÇÃO (FIM) ***
+        formData.append('file', file); // API PixelPath usa 'file'
 
         try {
             const response = await fetch(apiUrl, {
@@ -703,7 +701,6 @@ class WhatsAppBulkManager {
             if (!response.ok) {
                 // Trata erros da API
                 let errorMsg = 'Erro de Conversão: Falha inesperada no servidor.';
-                // (Opcional) A nova API pode retornar erros diferentes, mas mantemos os antigos por enquanto.
                 if (response.status === 400) {
                     errorMsg = 'Erro de Conversão: O arquivo enviado não parece ser um PDF válido.';
                 } else if (response.status === 422) {
@@ -719,11 +716,14 @@ class WhatsAppBulkManager {
             }
 
             // Sucesso na conversão
-            // Atualiza a mensagem de progresso
             document.getElementById('progressTitle').textContent = 'Processando Excel';
             document.getElementById('progressText').textContent = 'PDF convertido! Lendo dados do Excel resultante...';
             
             const excelBlob = await response.blob();
+            
+            // NOVO: Armazena o blob e mostra o botão de download
+            this.convertedExcelBlob = excelBlob;
+            this.downloadConvertedExcelBtn.classList.remove('hidden');
             
             // Cria um novo objeto File a partir do Blob
             const excelFile = new File([excelBlob], `${file.name.replace(/\.pdf$/i, '')}_converted.xlsx`, { 
@@ -735,7 +735,6 @@ class WhatsAppBulkManager {
             this.showFileInfo(excelFile);
 
             // Entrega o novo arquivo Excel para a função de processamento
-            // O `handleExcelUpload` cuidará de `hideProgress`
             await this.handleExcelUpload(excelFile);
 
         } catch (error) {
@@ -771,6 +770,31 @@ class WhatsAppBulkManager {
         }
     }
 
+    // NOVO: Função para baixar o Excel convertido
+    downloadConvertedExcel() {
+        if (!this.convertedExcelBlob) {
+            this.showError('Nenhum arquivo Excel convertido para baixar.');
+            return;
+        }
+
+        // Tenta pegar o nome do arquivo atual (que deve ser o ..._converted.xlsx)
+        let downloadName = this.currentFile ? this.currentFile.name : 'converted.xlsx';
+        
+        // Garante que o nome termine em .xlsx
+        if (!downloadName.toLowerCase().endsWith('.xlsx')) {
+             downloadName = downloadName.replace(/\.[^/.]+$/, "") + ".xlsx";
+        }
+
+        const url = URL.createObjectURL(this.convertedExcelBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = downloadName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
     // NOVO: Helper para ícone do arquivo
     getFileIconClass(fileName) {
         const lowerName = (fileName || '').toLowerCase();
@@ -800,6 +824,7 @@ class WhatsAppBulkManager {
         this.currentFile = null;
         this.contacts = [];
         this.processedContacts = [];
+        this.convertedExcelBlob = null; // NOVO: Limpa o blob
         this.fileInfo.classList.add('hidden');
         this.mappingSection.classList.add('hidden');
         this.previewSection.classList.add('hidden');
@@ -807,6 +832,7 @@ class WhatsAppBulkManager {
         this.apiConfigSection.classList.add('hidden');
         this.actionSection.classList.add('hidden');
         this.fileInput.value = '';
+        this.downloadConvertedExcelBtn.classList.add('hidden'); // NOVO: Esconde o botão
         
         // NOVO: Reseta o ícone
         this.fileIcon.className = 'fas fa-file-lines text-gray-600 text-2xl mr-4';
